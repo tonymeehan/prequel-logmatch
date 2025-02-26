@@ -1,9 +1,5 @@
 package scanner
 
-import "github.com/prequel-dev/prequel-logmatch/pkg/entry"
-
-type LogEntry = entry.LogEntry
-
 const avgLogSize = 256
 
 type StdReadScan struct {

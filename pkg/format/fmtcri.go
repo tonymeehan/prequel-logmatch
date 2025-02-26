@@ -1,15 +1,13 @@
 package format
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"time"
 
-	"github.com/icza/backscanner"
-	"github.com/rs/zerolog/log"
+	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
 )
 
 const (
@@ -41,8 +39,8 @@ func (f *criFmtT) Type() FmtType {
 
 func (f *criFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 
-	ptr := poolAlloc()
-	defer poolFree(ptr)
+	ptr := pool.PoolAlloc()
+	defer pool.PoolFree(ptr)
 	buf := (*ptr)[:tsBufSize]
 
 	n, err := io.ReadFull(rdr, buf)
@@ -61,98 +59,6 @@ func (f *criFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 
 func (f *criFmtT) ReadEntry(line []byte) (LogEntry, error) {
 	return readCriEntry(line)
-}
-
-func (f *criFmtT) ScanForward(rdr io.Reader, maxSz int, stop int64, scanF ScanFuncT) error {
-
-	var (
-		buf     []byte
-		bufSz   = calcBufSize(maxSz)
-		scanner = bufio.NewScanner(rdr)
-	)
-
-	if bufSz == MaxRecordSize {
-		ptr := poolAlloc()
-		defer poolFree(ptr)
-		buf = *ptr
-	} else {
-		buf = make([]byte, bufSz)
-	}
-
-	// Scanner will bail with bufio.ErrTooLong if it encounters a line that is > bufSz.
-	scanner.Buffer(buf, bufSz)
-
-LOOP:
-	for scanner.Scan() {
-
-		entry, lerr := readCriEntry(scanner.Bytes())
-		if lerr != nil {
-			// Tolerate badly formed lines
-			log.Error().
-				Err(lerr).
-				Str("line", scanner.Text()).
-				Msg("Fail CRI decode.  Continue...")
-			continue
-		}
-
-		if entry.Timestamp > stop {
-			break LOOP
-		}
-
-		if scanF(entry) {
-			break LOOP
-		}
-	}
-
-	return scanner.Err()
-}
-
-func (f *criFmtT) ScanReverse(src io.ReaderAt, maxSz int, stop, mark int64, scanF ScanFuncT) error {
-
-	var (
-		err   error
-		bufSz = (maxSz/pageSize + 1) * pageSize
-		opts  = backscanner.Options{
-			ChunkSize:     bufSz,
-			MaxBufferSize: maxSize(bufSz),
-		}
-		scanner = backscanner.NewOptions(src, int(mark), &opts)
-	)
-
-LOOP:
-	for {
-		var line []byte
-		line, _, err = scanner.LineBytes()
-
-		switch err {
-		case nil:
-		case io.EOF:
-			err = nil
-			break LOOP
-		default:
-			break LOOP
-		}
-
-		entry, lerr := readCriEntry(line)
-		if lerr != nil {
-			// Tolerate badly formed lines
-			log.Error().
-				Err(err).
-				Str("line", string(line)).
-				Msg("Fail CRI decode.  Continue...")
-			continue
-		}
-
-		if entry.Timestamp < stop {
-			break LOOP
-		}
-
-		if scanF(entry) {
-			break LOOP
-		}
-	}
-
-	return err
 }
 
 // Read CRI Entry line

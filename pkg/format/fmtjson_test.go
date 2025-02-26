@@ -34,7 +34,7 @@ func TestJsonLogsCorrupt(t *testing.T) {
 		rdr   = strings.NewReader(corrupted)
 	)
 
-	err := f.ScanForward(rdr, maxSz, math.MaxInt64, sr.Scan)
+	err := scanner.ScanForward(rdr, f.ReadEntry, sr.Scan, scanner.WithMaxSize(maxSz))
 
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)
@@ -58,7 +58,7 @@ func TestJsonLogsExtraLF(t *testing.T) {
 		rdr   = strings.NewReader("\n\n\n" + corrupted + "\n\n\n" + extra + "\n\n")
 	)
 
-	err := f.ScanForward(rdr, maxSz, math.MaxInt64, sr.Scan)
+	err := scanner.ScanForward(rdr, f.ReadEntry, sr.Scan, scanner.WithMaxSize(maxSz))
 
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)
@@ -104,7 +104,8 @@ func TestJsonLogsMaxSize(t *testing.T) {
 			sr := scanner.NewStdReadScan(tc.maxSz)
 
 			rdr := strings.NewReader(corrupted)
-			err := f.ScanForward(rdr, tc.maxSz, stop, sr.Scan)
+
+			err := scanner.ScanForward(rdr, f.ReadEntry, sr.Scan, scanner.WithMaxSize(tc.maxSz), scanner.WithStop(stop))
 
 			if err != tc.wantErr {
 				t.Errorf("Expected %v error got %v", tc.wantErr, err)

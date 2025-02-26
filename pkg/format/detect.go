@@ -24,15 +24,10 @@ func (f FmtType) String() string {
 	return "unknown"
 }
 
-type ScanFuncT func(entry LogEntry) bool
-
 type LogFmt interface {
 	Type() FmtType
 	ReadTimestamp(rdr io.Reader) (int64, error)
 	ReadEntry(line []byte) (LogEntry, error)
-
-	ScanForward(rdr io.Reader, maxSz int, stop int64, scanF ScanFuncT) error
-	ScanReverse(rdr io.ReaderAt, maxSz int, stop, mark int64, scanF ScanFuncT) error
 }
 
 var ErrFormatDetect = errors.New("fail to detect log format")
@@ -86,20 +81,4 @@ func Detect(rdr io.Reader) (LogFmt, int64, error) {
 	}
 
 	return nil, -1, errors.Join(elist...)
-}
-
-// Allocate buffer large enough to hold the requested payload,
-// plus an extra 25% to account for formatting overhead in the
-// original payload.  When used in bufio.Scan(), size dictates
-// the maximum line size allowed, so must be large enough to
-// accommodate overhead of a line that post processing is less
-// than or equal to maxSize.
-
-func calcBufSize(maxSz int) int {
-	bufSz := maxSz + (maxSz / 4)
-
-	if bufSz <= 0 || bufSz > MaxRecordSize {
-		bufSz = MaxRecordSize
-	}
-	return bufSz
 }
