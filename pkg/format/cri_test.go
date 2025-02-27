@@ -42,9 +42,11 @@ func TestReadCriEntry(t *testing.T) {
 		"line_with_escape":       {data: shortTimestampS + " stderr P:FUNK \\n", want: LogEntry{Timestamp: shortTimestamp.UnixNano(), Stream: tokenStderr, Line: "\\n"}},
 	}
 
+	var cf criFmtT
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := readCriEntry([]byte(tc.data))
+			got, err := cf.ReadEntry([]byte(tc.data))
 			if tc.want.Line != got.Line {
 				t.Fatalf("expected line: %v, got: %v", tc.want.Line, got.Line)
 			}

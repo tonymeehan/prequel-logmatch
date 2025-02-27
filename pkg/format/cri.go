@@ -33,8 +33,15 @@ var (
 type criFmtT struct {
 }
 
-func (f *criFmtT) Type() FmtType {
-	return FmtTypeCri
+type criFactoryT struct {
+}
+
+func (f *criFactoryT) New() ParserI {
+	return &criFmtT{}
+}
+
+func (f *criFactoryT) String() string {
+	return "cri"
 }
 
 func (f *criFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
@@ -57,17 +64,13 @@ func (f *criFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	return scanCriTimestamp(buf[:n])
 }
 
-func (f *criFmtT) ReadEntry(line []byte) (LogEntry, error) {
-	return readCriEntry(line)
-}
-
 // Read CRI Entry line
 // (see https://github.com/kubernetes/kubernetes/blob/v1.29.1/pkg/kubelet/kuberuntime/logs/logs.go#L129)
 // Expects format:
 //	2016-10-06T00:17:09.669794202Z stdout P log content 1
 //	2016-10-06T00:17:09.669794203Z stderr F log content 2
 
-func readCriEntry(line []byte) (entry LogEntry, err error) {
+func (f *criFmtT) ReadEntry(line []byte) (entry LogEntry, err error) {
 
 	idx := bytes.IndexByte(line, delimiter)
 	if idx < 0 {
@@ -133,7 +136,7 @@ func scanCriTimestamp(buf []byte) (int64, error) {
 	return ts.UnixNano(), nil
 }
 
-func detectCri(line []byte) (LogFmt, int64, error) {
+func detectCri(line []byte) (FactoryI, int64, error) {
 
 	var cf criFmtT
 	entry, err := cf.ReadEntry(line)
@@ -142,5 +145,5 @@ func detectCri(line []byte) (LogFmt, int64, error) {
 		return nil, -1, err
 	}
 
-	return &cf, entry.Timestamp, nil
+	return &criFactoryT{}, entry.Timestamp, nil
 }

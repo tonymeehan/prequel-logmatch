@@ -4,35 +4,23 @@ import (
 	"bufio"
 	"errors"
 	"io"
+
+	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
 )
 
-type FmtType int
-
-const (
-	FmtTypeJSON FmtType = iota + 1
-	FmtTypeCri
-)
-
-// Adhere to the fmt.Stringer interface
-func (f FmtType) String() string {
-	switch f {
-	case FmtTypeJSON:
-		return "json"
-	case FmtTypeCri:
-		return "cri"
-	}
-	return "unknown"
+type FactoryI interface {
+	New() ParserI
+	String() string
 }
 
-type LogFmt interface {
-	Type() FmtType
+type ParserI interface {
 	ReadTimestamp(rdr io.Reader) (int64, error)
 	ReadEntry(line []byte) (LogEntry, error)
 }
 
 var ErrFormatDetect = errors.New("fail to detect log format")
 
-type DetectFormatFunc func(line []byte) (LogFmt, int64, error)
+type DetectFormatFunc func(line []byte) (FactoryI, int64, error)
 
 var supportedFormats = []DetectFormatFunc{
 	detectJSON,
@@ -41,25 +29,10 @@ var supportedFormats = []DetectFormatFunc{
 
 const (
 	DefBufferSize = 4 << 10 // 4K
-	MaxRecordSize = 4 << 20 // 4 Megabyte max record size
+	MaxRecordSize = pool.MaxRecordSize
 )
 
-type fmtOptT struct {
-	exp   string
-	field string
-}
-
-func NewParser(ty FmtType) LogFmt {
-	switch ty {
-	case FmtTypeCri:
-		return &criFmtT{}
-	case FmtTypeJSON:
-		return &jsonFmtT{}
-	}
-	return nil
-}
-
-func Detect(rdr io.Reader) (LogFmt, int64, error) {
+func Detect(rdr io.Reader) (FactoryI, int64, error) {
 
 	var (
 		elist = []error{ErrFormatDetect}

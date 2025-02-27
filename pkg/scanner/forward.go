@@ -23,7 +23,8 @@ func ScanForward(rdr io.Reader, parseF ParseFuncT, scanF ScanFuncT, opts ...Scan
 		buf = make([]byte, o.maxSz)
 	}
 
-	// Scanner will bail with bufio.ErrTooLong if it encounters a line that is > o.maxSz.
+	// Scanner will bail with bufio.ErrTooLong
+	// if it encounters a line that is > o.maxSz.
 	scanner.Buffer(buf, o.maxSz)
 
 LOOP:

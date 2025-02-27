@@ -1,12 +1,19 @@
 package format
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/goccy/go-json"
 )
+
+var ErrJsonUnmarshal = fmt.Errorf("fail JSON unmarshal")
+
+func NewJsonFactory() FactoryI {
+	return &jsonFactoryT{}
+}
 
 type jsonLogT struct {
 	Log    string    `json:"log"`
@@ -17,8 +24,15 @@ type jsonLogT struct {
 type jsonFmtT struct {
 }
 
-func (f *jsonFmtT) Type() FmtType {
-	return FmtTypeJSON
+type jsonFactoryT struct {
+}
+
+func (f *jsonFactoryT) New() ParserI {
+	return &jsonFmtT{}
+}
+
+func (f *jsonFactoryT) String() string {
+	return "json"
 }
 
 func (f *jsonFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
@@ -47,7 +61,7 @@ func (f *jsonFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 	var line jsonLogT
 
 	if err = json.Unmarshal(data, &line); err != nil {
-		err = fmt.Errorf("fail JSON unmarshal: %w", err)
+		err = errors.Join(ErrJsonUnmarshal, err)
 		return
 	}
 
@@ -58,7 +72,7 @@ func (f *jsonFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 	return
 }
 
-func detectJSON(line []byte) (LogFmt, int64, error) {
+func detectJSON(line []byte) (FactoryI, int64, error) {
 
 	var jf jsonFmtT
 	entry, err := jf.ReadEntry(line)
@@ -67,5 +81,20 @@ func detectJSON(line []byte) (LogFmt, int64, error) {
 		return nil, -1, err
 	}
 
-	return &jf, entry.Timestamp, nil
+	var unsetTime time.Time
+
+	// Validate that we have a CRI JSON log entry
+	if entry.Line == "" || entry.Timestamp == unsetTime.UnixNano() {
+		return nil, -1, ErrFormatDetect
+	}
+
+	switch entry.Stream {
+	case tokenStdout:
+	case tokenStderr:
+	default:
+		// Uknown stream type
+		return nil, -1, ErrFormatDetect
+	}
+
+	return &jsonFactoryT{}, entry.Timestamp, nil
 }
