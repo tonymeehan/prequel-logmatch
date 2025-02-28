@@ -135,6 +135,22 @@ func makeYamlUnmarshal() func(string) (any, error) {
 	}
 }
 
+func NewJqJson(term string) (MatchFunc, error) {
+	unmarshal := makeJsonUnmarshal()
+
+	query, err := gojq.Parse(term)
+	if err != nil {
+		return nil, err
+	}
+
+	code, err := gojq.Compile(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return _makeJqMatch(term, code, unmarshal), nil
+}
+
 func makeJqMatch(term string) (MatchFunc, error) {
 	var unmarshal unmarshalFuncT
 
