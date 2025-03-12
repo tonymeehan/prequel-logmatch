@@ -5,103 +5,53 @@ import (
 	"time"
 )
 
-func TestInverseAloneRealtime(t *testing.T) {
-
-	window := time.Millisecond * 500
-	ia, err := NewInverseAlone(window, "alpha", "beta")
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
-
-	// Non-matching event should put matcher in active state
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "clean"}
-	hits := ia.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Matcher will not hit until edge condition; fire some non-matchers
-	fireNoops(t, ia, 11)
-
-	// Wait until timer first.
-	time.Sleep(window)
-
-	// Scan clean event, should fire active
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "clean"}
-	hits = ia.Scan(ev2)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected 1 cnt: got %v", hits.Cnt)
-	}
-
-	// Log fire should be empty entry with timestamp on the activating timestamp
-	if !testEqualLogs(t, hits.Logs, []LogEntry{{Timestamp: ev1.Timestamp}}) {
-		t.Errorf("Fail equal logs")
-	}
-
-	// Should not fire again until next timeout
-LOOP:
-	for {
-		now := time.Now().UnixNano()
-		ev := LogEntry{Timestamp: now, Line: "clean"}
-		hits = ia.Scan(ev)
-
-		if now-ev2.Timestamp >= int64(window) {
-			if hits.Cnt != 1 {
-				t.Errorf("Expected 1 cnt: got %v", hits.Cnt)
-			}
-
-			// Log fire should be empty entry with timestamp on the activating timestamp
-			if !testEqualLogs(t, hits.Logs, []LogEntry{{Timestamp: ev2.Timestamp}}) {
-				t.Errorf("Fail equal logs")
-			}
-			break LOOP
-		} else {
-			testNoFire(t, hits)
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
-func TestInverseSequenceRealtime(t *testing.T) {
-	window := time.Millisecond * 500
+func TestInverseSequenceSlideLeft(t *testing.T) {
+	var (
+		clock     = time.Now().UnixNano()
+		window    = time.Millisecond * 500
+		slide     = int64(-1 * time.Second)
+		absWindow = int64(time.Second)
+	)
 	iq, err := NewInverseSeq(
 		window,
-		[]string{"badterm1", "badterm2"},
 		[]string{"alpha", "beta"},
+		[]InverseTerm{
+			{
+				Term:     "badterm1",
+				Slide:    slide,
+				Window:   absWindow,
+				Absolute: true,
+			},
+		},
 	)
 	if err != nil {
 		t.Fatalf("Fail constructor: %v", err)
 	}
 
-	// Scan first matcher, should start the active timer.
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha."}
-	hits := iq.Scan(ev1)
+	// Fire a negative term slightout side of the left slide.
+	nv1 := LogEntry{Timestamp: clock, Line: "badterm1"}
+	hits := iq.Scan(nv1)
 	testNoFire(t, hits)
 
-	// Scan second matcher, should not fire yet cause time hasn't hit.
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match beta."}
+	// Scan first matcher right on the slide boundary
+	ev1 := LogEntry{Timestamp: clock + absWindow, Line: "Match alpha."}
+	hits = iq.Scan(ev1)
+	testNoFire(t, hits)
+
+	// Scan first matcher right on the slide boundary; should fail due to slide.
+	ev2 := LogEntry{Timestamp: clock + absWindow + 1, Line: "Match beta."}
 	hits = iq.Scan(ev2)
 	testNoFire(t, hits)
 
-	// Throw in some NOOPS just for fun
-	fireNoops(t, iq, 100)
+	// Ok let's fire again now passed the slide window. Should come through.
 
-	// Wait for the window to expire
-	time.Sleep(window)
-
-	// Now fire another start event; this should fire the original events as we are now activated.
-	ev3 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha part deux."}
+	// Scan first matcher right on the slide boundary
+	ev3 := LogEntry{Timestamp: clock + absWindow + 2, Line: "Match alpha."}
 	hits = iq.Scan(ev3)
+	testNoFire(t, hits)
 
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
-		t.Errorf("Fail logs equal")
-	}
-
-	// We are now in an active state, if we scan a 'beta' match it should fire immediately.
-	ev4 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match beta part deux."}
+	// Scan first matcher right on the slide boundary; should fail due to slide.
+	ev4 := LogEntry{Timestamp: clock + absWindow + 3, Line: "Match beta."}
 	hits = iq.Scan(ev4)
 
 	if hits.Cnt != 1 {
@@ -111,55 +61,399 @@ func TestInverseSequenceRealtime(t *testing.T) {
 	if !testEqualLogs(t, hits.Logs, []LogEntry{ev3, ev4}) {
 		t.Errorf("Fail logs equal")
 	}
+}
 
-	// Match alpha again, but we are going to hit the inverse condition on next event and negate
-	ev5 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha part trois."}
-	hits = iq.Scan(ev5)
-	testNoFire(t, hits)
-
-	// Match inverse condition
-	ev6 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "This is badterm1"}
-	hits = iq.Scan(ev6)
-	testNoFire(t, hits)
-
-	// A beta scan should not emit now, and in fact should be ignore.
-	ev7 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match beta part trois."}
-	hits = iq.Scan(ev7)
-	testNoFire(t, hits)
-
-	// The timer restarted on ev7; scan alpha then beta again.
-	// Match should not fire until timer expires.
-	ev8 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha part quatre."}
-	hits = iq.Scan(ev8)
-	testNoFire(t, hits)
-
-	// Should cause overlap fires on beta after timeout.
-	ev9 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha part cinq."}
-	hits = iq.Scan(ev9)
-	testNoFire(t, hits)
-
-	// A beta scan should not emit now.
-	ev10 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match beta part quatre."}
-	hits = iq.Scan(ev10)
-	testNoFire(t, hits)
-
-	// Wait for window timeout
-	time.Sleep(window)
-
-	// Fire a innocuous non matching event
-	ev11 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Innocuous"}
-	hits = iq.Scan(ev11)
-
-	// Expect the two overlapping pending events fired
-	if hits.Cnt != 2 {
-		t.Errorf("Expected cnt 2, got: %v", hits.Cnt)
+func TestInverseSequenceSlideRight(t *testing.T) {
+	var (
+		clock     = time.Now().UnixNano()
+		window    = time.Millisecond * 500
+		slide     = int64(time.Second)
+		absWindow = int64(time.Second)
+	)
+	iq, err := NewInverseSeq(
+		window,
+		[]string{"alpha", "beta"},
+		[]InverseTerm{
+			{
+				Term:     "badterm1",
+				Slide:    slide,
+				Window:   absWindow,
+				Absolute: true,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fail constructor: %v", err)
 	}
 
-	if !testEqualLogs(t, hits.Logs[:2], []LogEntry{ev8, ev10}) {
+	// Scan first matcher
+	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
+	hits := iq.Scan(ev1)
+	testNoFire(t, hits)
+
+	// Scan first matcher
+	ev2 := LogEntry{Timestamp: clock + 1, Line: "Match beta."}
+	hits = iq.Scan(ev2)
+	testNoFire(t, hits)
+
+	// Fire a negative term within the window slide window.
+	// This should negate the first match
+	nv1 := LogEntry{Timestamp: clock + absWindow + slide - 1, Line: "badterm1"}
+	hits = iq.Scan(nv1)
+	testNoFire(t, hits)
+
+	// Ok let's fire again now passed the slide window. Should come through.
+
+	// Scan first matcher right on the slide boundary
+	clock += absWindow + slide
+
+	ev3 := LogEntry{Timestamp: clock, Line: "Match alpha."}
+	hits = iq.Scan(ev3)
+	testNoFire(t, hits)
+
+	// Scan first matcher right on the slide boundary; should fail due to slide.
+	ev4 := LogEntry{Timestamp: clock + 1, Line: "Match beta."}
+	hits = iq.Scan(ev4)
+	testNoFire(t, hits) // Can't fire until past the slide window
+
+	ev5 := LogEntry{Timestamp: clock + absWindow + slide - 1, Line: "NOOP"}
+	hits = iq.Scan(ev5)
+	testNoFire(t, hits) // Can't fire until past the slide window
+
+	// Should be good now
+	ev6 := LogEntry{Timestamp: clock + absWindow + slide, Line: "NOOP"}
+	hits = iq.Scan(ev6)
+
+	if hits.Cnt != 1 {
+		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	}
+
+	if !testEqualLogs(t, hits.Logs, []LogEntry{ev3, ev4}) {
+		t.Errorf("Fail logs equal")
+	}
+}
+
+func TestInverseSequenceSlideAnchor(t *testing.T) {
+	var (
+		clock     = time.Now().UnixNano()
+		window    = time.Millisecond * 500
+		absWindow = int64(time.Minute)
+	)
+	iq, err := NewInverseSeq(
+		window,
+		[]string{"alpha", "beta"},
+		[]InverseTerm{
+			{
+				Term:     "badterm1",
+				Window:   absWindow,
+				Absolute: true,
+				Anchor:   1,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fail constructor: %v", err)
+	}
+
+	// Scan first matcher
+	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
+	hits := iq.Scan(ev1)
+	testNoFire(t, hits)
+
+	// Scan first matcher
+	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
+	hits = iq.Scan(ev2)
+	testNoFire(t, hits)
+
+	// Should not fire as we are still beneath the shifted window
+	ev3 := LogEntry{Timestamp: clock + int64(window) + absWindow - 1, Line: "Nope"}
+	hits = iq.Scan(ev3)
+	testNoFire(t, hits)
+
+	// Should should fire as we are outside window
+	ev4 := LogEntry{Timestamp: clock + int64(window) + absWindow, Line: "Nope"}
+	hits = iq.Scan(ev4)
+
+	if hits.Cnt != 1 {
+		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	}
+
+	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
+		t.Errorf("Fail logs equal")
+	}
+}
+
+func TestInverseSequenceRelative(t *testing.T) {
+	window := time.Millisecond * 500
+	iq, err := NewInverseSeq(
+		window,
+		[]string{"alpha", "beta"},
+		[]InverseTerm{
+			{Term: "badterm1"},
+			{Term: "badterm2"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fail constructor: %v", err)
+	}
+
+	// Scan first matcher
+	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha."}
+	hits := iq.Scan(ev1)
+	testNoFire(t, hits)
+
+	// Throw in some NOOPS just for fun
+	fireNoops(t, iq, 100)
+
+	// Scan second matcher
+	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match beta."}
+	hits = iq.Scan(ev2)
+
+	if hits.Cnt != 1 {
+		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	}
+
+	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
 		t.Errorf("Fail logs equal")
 	}
 
-	if !testEqualLogs(t, hits.Logs[2:], []LogEntry{ev9, ev10}) {
+	// Now fire another start event; nothing should fire
+	ev3 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha part deux."}
+	hits = iq.Scan(ev3)
+	testNoFire(t, hits)
+
+	// Fire a inverse event
+	ev4 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "This is badterm1"}
+	hits = iq.Scan(ev4)
+	testNoFire(t, hits)
+
+	// Fire end event, it should not fire due to inverse above
+	ev5 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "beta my friend"}
+	hits = iq.Scan(ev5)
+	testNoFire(t, hits)
+
+	// Similarly this should fail because start was removed from seq matcher
+	ev6 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "beta my friend"}
+	hits = iq.Scan(ev6)
+	testNoFire(t, hits)
+
+	// Fire a inverse event
+	ev7 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "This is badterm7"}
+	hits = iq.Scan(ev7)
+	testNoFire(t, hits)
+
+	// Fire alpha then beta, should fire because inverse was before alpha
+	ev8 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Match alpha part trois."}
+	hits = iq.Scan(ev8)
+	testNoFire(t, hits)
+
+	ev9 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "beta again"}
+	hits = iq.Scan(ev9)
+
+	if hits.Cnt != 1 {
+		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	}
+
+	if !testEqualLogs(t, hits.Logs, []LogEntry{ev8, ev9}) {
+		t.Errorf("Fail logs equal")
+	}
+
+	// Force gc
+	iq.garbageCollect(time.Now().UnixNano())
+
+	// GC should be clean
+	if iq.nTerms != 0 {
+		t.Errorf("Expected 0 terms, got: %v", iq.nTerms)
+	}
+}
+
+func TestInverseSequenceAbsoluteHit(t *testing.T) {
+	var (
+		clock     = time.Now().UnixNano()
+		window    = time.Millisecond * 500
+		absWindow = int64(time.Second)
+	)
+
+	iq, err := NewInverseSeq(
+		window,
+		[]string{"alpha", "beta"},
+		[]InverseTerm{
+			{Term: "badterm1"},
+			{Term: "badterm2"},
+			{
+				Term:     "badterm3",
+				Absolute: true,
+				Window:   absWindow,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fail constructor: %v", err)
+	}
+
+	// Scan first matcher
+	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
+	hits := iq.Scan(ev1)
+	testNoFire(t, hits)
+
+	// Scan second matcher, exactly within the window.
+	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
+	hits = iq.Scan(ev2)
+
+	// Should not hit  until the absolute window is up
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
+	}
+
+	// Assert log one nanosecond before the absolute window
+	ev3 := LogEntry{Timestamp: clock + absWindow - 1, Line: "NOOP"}
+	hits = iq.Scan(ev3)
+
+	// Should not hit  until the absolute window is up
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
+	}
+
+	// Now assert log at exactly the absolute window, should fire
+	ev4 := LogEntry{Timestamp: clock + absWindow, Line: "NOOP"}
+	hits = iq.Scan(ev4)
+
+	// Should not hit  until the absolute window is up
+	if hits.Cnt != 1 {
+		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	}
+
+	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
+		t.Errorf("Fail logs equal")
+	}
+}
+
+// Create an absolute window and fire an inverse into that window. Should drop.
+func TestInverseSequenceAbsoluteMiss(t *testing.T) {
+	var (
+		clock     = time.Now().UnixNano()
+		window    = time.Millisecond * 500
+		absWindow = int64(time.Second)
+	)
+
+	iq, err := NewInverseSeq(
+		window,
+		[]string{"alpha", "beta"},
+		[]InverseTerm{
+			{Term: "badterm1"},
+			{Term: "badterm2"},
+			{
+				Term:     "badterm3",
+				Absolute: true,
+				Window:   absWindow,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fail constructor: %v", err)
+	}
+
+	// Scan first matcher
+	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
+	hits := iq.Scan(ev1)
+	testNoFire(t, hits)
+
+	// Scan second matcher, exactly within the window.
+	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
+	hits = iq.Scan(ev2)
+
+	// Should not hit  until the absolute window is up
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
+	}
+
+	// Fire a negative term into the absolute window
+	nv := LogEntry{Timestamp: clock + absWindow - 2, Line: "badterm3"}
+	hits = iq.Scan(nv)
+
+	// Should not hit  until the absolute window is up
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
+	}
+
+	// Assert log one nanosecond before the absolute window
+	ev3 := LogEntry{Timestamp: clock + absWindow - 1, Line: "NOOP"}
+	hits = iq.Scan(ev3)
+
+	// Should not hit  until the absolute window is up
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
+	}
+
+	// Now assert log at exactly the absolute window, should fire
+	ev4 := LogEntry{Timestamp: clock + absWindow, Line: "NOOP"}
+	hits = iq.Scan(ev4)
+
+	// Should not hit due to negative term
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	}
+
+}
+
+func TestInverseSequencePosRelativeOffset(t *testing.T) {
+	var (
+		clock     = time.Now().UnixNano()
+		window    = time.Millisecond * 500
+		relWindow = int64(time.Second)
+	)
+
+	iq, err := NewInverseSeq(
+		window,
+		[]string{"alpha", "beta"},
+		[]InverseTerm{
+			{Term: "badterm1"},
+			{Term: "badterm2"},
+			{
+				Term:     "badterm3",
+				Absolute: false,
+				Window:   relWindow,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fail constructor: %v", err)
+	}
+
+	// Scan first matcher
+	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
+	hits := iq.Scan(ev1)
+	testNoFire(t, hits)
+
+	// Scan second matcher, exactly within the window.
+	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
+	hits = iq.Scan(ev2)
+
+	// Should not hit  until the relative window is up
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
+	}
+
+	// Assert log one nanosecond before the relative window
+	relDeadline := ev2.Timestamp - ev1.Timestamp + relWindow
+	ev3 := LogEntry{Timestamp: clock + relDeadline - 1, Line: "NOOP"}
+	hits = iq.Scan(ev3)
+
+	// Should not hit  until the relative window is up
+	if hits.Cnt != 0 {
+		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
+	}
+
+	// Now assert log at exactly the relative window, should fire
+	ev4 := LogEntry{Timestamp: clock + relDeadline, Line: "NOOP"}
+	hits = iq.Scan(ev4)
+
+	// Should not hit  until the absolute window is up
+	if hits.Cnt != 1 {
+		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	}
+
+	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
 		t.Errorf("Fail logs equal")
 	}
 }
@@ -240,7 +534,6 @@ func TestTonySequence(t *testing.T) {
 	window := time.Second * 10
 	iq, err := NewInverseSeq(
 		window,
-		[]string{"Shutdown initiated"},
 		[]string{
 			"Discarding message",
 			"Discarding message",
@@ -254,6 +547,13 @@ func TestTonySequence(t *testing.T) {
 			"Discarding message",
 			"Mnesia overloaded",
 		},
+		[]InverseTerm{
+			{
+				Term:     "Shutdown initiated",
+				Window:   int64(window),
+				Absolute: true,
+			},
+		},
 	)
 	if err != nil {
 		t.Fatalf("Fail constructor: %v", err)
@@ -265,12 +565,36 @@ func TestTonySequence(t *testing.T) {
 		testNoFire(t, hits)
 	}
 
-	// fire a noop event, past the window (could also run poll)
-	ev := LogEntry{Timestamp: replayTonyOK[0].Timestamp + int64(window)}
+	// Fire a noop event at exactly the first window
+	ev := LogEntry{Timestamp: replayTonyOK[1].Timestamp + int64(window)}
 	hits := iq.Scan(ev)
 
-	if hits.Cnt != 3 {
+	if hits.Cnt != 1 {
 		t.Errorf("Expected 3 hits, got: %v", hits.Cnt)
+	}
+
+	// Fire a noop event at exactly the second window
+	ev = LogEntry{Timestamp: replayTonyOK[2].Timestamp + int64(window)}
+	hits = iq.Scan(ev)
+
+	if hits.Cnt != 1 {
+		t.Errorf("Expected 3 hits, got: %v", hits.Cnt)
+	}
+
+	// Fire a noop event at exactly the third window
+	ev = LogEntry{Timestamp: replayTonyOK[3].Timestamp + int64(window)}
+	hits = iq.Scan(ev)
+
+	if hits.Cnt != 1 {
+		t.Errorf("Expected 3 hits, got: %v", hits.Cnt)
+	}
+
+	// Fire hour into the future, should get nothing
+	ev = LogEntry{Timestamp: replayTonyOK[3].Timestamp + int64(time.Hour)}
+	hits = iq.Scan(ev)
+
+	if hits.Cnt != 0 {
+		t.Errorf("Expected 0 hits, got: %v", hits.Cnt)
 	}
 }
 
@@ -307,7 +631,6 @@ func TestTonySequenceFail(t *testing.T) {
 	window := time.Second * 10
 	iq, err := NewInverseSeq(
 		window,
-		[]string{"Shutdown initiated"},
 		[]string{
 			"Discarding message",
 			"Discarding message",
@@ -320,6 +643,13 @@ func TestTonySequenceFail(t *testing.T) {
 			"Discarding message",
 			"Discarding message",
 			"Mnesia overloaded",
+		},
+		[]InverseTerm{
+			{
+				Term:     "Shutdown initiated",
+				Window:   int64(window),
+				Absolute: true,
+			},
 		},
 	)
 	if err != nil {
