@@ -6,6 +6,8 @@ package match
 // - Can build a much simpler matcher if all inverse terms are lined up.
 // - If not matching inverse terms in the past, there is no reason to keep a history and do garbage collection.
 // - The gc trigger is arbitrary.   Need a cleaner solution.
+// - Need to add thresholds for memory usage.  If a user specifies a huge lookup and we get a lot of inverse
+//   hits, we could be holding on to way to0 much ram.   At a certain threshold, should drop samples.
 //
 // That said, seems to be working for the moment.
 
@@ -91,7 +93,7 @@ func NewInverseSeq(window time.Duration, seqTerms []string, inverseTerms []Inver
 
 func (r *InverseSeq) Scan(e entry.LogEntry) (hits Hits) {
 
-	// Run through inverse matchers
+	// Run the inverse matchers
 	for i, m := range r.matchers {
 		if m.mfunc(e.Line) {
 			r.terms[i] = append(r.terms[i], e.Timestamp)
@@ -100,9 +102,7 @@ func (r *InverseSeq) Scan(e entry.LogEntry) (hits Hits) {
 	}
 
 	// Run the sequence matchers.
-	nHits := r.mseq.Scan(e)
-
-	if nHits.Cnt > 0 {
+	if nHits := r.mseq.Scan(e); nHits.Cnt > 0 {
 		r.processHits(nHits)
 	}
 
