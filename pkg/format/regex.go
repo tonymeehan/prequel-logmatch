@@ -3,6 +3,7 @@ package format
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
 )
 
-type CustomCbT func(m []byte) (int64, error)
+type CustomCbT func(exp *regexp.Regexp, m []byte) (int64, error)
 
 type regexFmtT struct {
 	expTime *regexp.Regexp
@@ -39,8 +40,7 @@ func NewRegexFactory(expTime, fmtTime string, cb CustomCbT) (FactoryI, error) {
 }
 
 func (f *regexFactoryT) New() ParserI {
-
-	return &regexFmtT{expTime: f.expTime, fmtTime: f.fmtTime}
+	return &regexFmtT{expTime: f.expTime, cb: f.cb, fmtTime: f.fmtTime}
 }
 
 func (f *regexFactoryT) String() string {
@@ -63,8 +63,10 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	// if it encounters a line that is > o.maxSz.
 
 	if scanner.Scan() {
+
 		m := f.expTime.Find(scanner.Bytes())
 		if m == nil {
+			fmt.Println("no match")
 			err = ErrNoTimestamp
 			return
 		}
@@ -84,14 +86,14 @@ func (f *regexFmtT) parseTime(m []byte) (ts int64, err error) {
 		t time.Time
 	)
 
-	switch f.cb {
-	case nil:
+	switch f.cb != nil {
+	case false:
 		if t, err = time.Parse(f.fmtTime, string(m)); err != nil {
 			err = errors.Join(ErrParseTimesamp, err)
 			return
 		}
 	default:
-		return f.cb(m)
+		return f.cb(f.expTime, m)
 	}
 
 	return t.UnixNano(), nil

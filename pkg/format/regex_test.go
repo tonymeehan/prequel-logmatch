@@ -2,6 +2,9 @@ package format
 
 import (
 	"bytes"
+	"fmt"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -51,5 +54,38 @@ func TestRegexReadTimestamp(t *testing.T) {
 
 	if ts != 1326233040000000000 {
 		t.Errorf("Expected %d got %d", 1326233040000000000, ts)
+	}
+}
+
+func TestRegexCustomCb(t *testing.T) {
+
+	exp := `"time":(\d{18,19})`
+	cb := func(re *regexp.Regexp, m []byte) (int64, error) {
+		tsStr := re.FindStringSubmatch(string(m))
+		for _, ts := range tsStr {
+			nanoEpoch, err := strconv.ParseInt(ts, 10, 64)
+			if err == nil {
+				return nanoEpoch, nil
+			}
+		}
+
+		return 0, fmt.Errorf("expected int64")
+	}
+
+	line := []byte(`{"some_similar_field":1618070400000000001,"time":1618070400000000000,"message":"test"}`)
+	factory, err := NewRegexFactory(exp, "", cb)
+	if err != nil {
+		t.Errorf("Expected nil error got %v", err)
+	}
+
+	f := factory.New()
+	ts, err := f.ReadTimestamp(bytes.NewReader(line))
+
+	if err != nil {
+		t.Errorf("Expected nil error got %v", err)
+	}
+
+	if ts != 1618070400000000000 {
+		t.Errorf("Expected %d got %d", 1618070400000000000, ts)
 	}
 }

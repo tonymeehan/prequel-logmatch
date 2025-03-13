@@ -23,6 +23,10 @@ func (f *rfc339NanoFactoryT) String() string {
 	return "rfc339Nano"
 }
 
+func (f *rfc339NanoFactoryT) SetCb(cb CustomCbT) {
+	// do nothing
+}
+
 func (f *rfc339NanoFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 
 	ptr := pool.PoolAlloc()
