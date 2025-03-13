@@ -3,7 +3,6 @@ package format
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"regexp"
 	"time"
@@ -123,10 +122,6 @@ func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 	}
 
 	var b []byte
-
-	for i, v := range m {
-		fmt.Printf("i: %d, v: %v\n", i, string(v))
-	}
 
 	if len(m) > 1 {
 		b = m[1]
