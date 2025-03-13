@@ -48,10 +48,6 @@ func (f *jsonCustomFactoryT) String() string {
 	return "json_custom"
 }
 
-func (f *jsonCustomFactoryT) SetCb(cb CustomCbT) {
-	// do nothing
-}
-
 func (f *jsonCustomFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 
 	var (
