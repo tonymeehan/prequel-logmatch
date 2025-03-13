@@ -85,17 +85,12 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	if scanner.Scan() {
 
 		m := f.expTime.FindSubmatch(scanner.Bytes())
-		if m == nil {
-			err = ErrNoTimestamp
-			return
-		}
-
 		if len(m) == 0 {
 			err = ErrNoTimestamp
 			return
 		}
 
-		ts, err = f.parseTime(m[1])
+		ts, err = f.cb(m[1])
 
 	} else {
 		err = scanner.Err()
@@ -104,18 +99,9 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	return
 }
 
-func (f *regexFmtT) parseTime(m []byte) (ts int64, err error) {
-	return f.cb(m)
-}
-
 // Read custom format
 func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 	m := f.expTime.FindSubmatch(data)
-	if m == nil {
-		err = ErrNoTimestamp
-		return
-	}
-
 	if len(m) == 0 {
 		err = ErrNoTimestamp
 		return
@@ -129,7 +115,7 @@ func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 		b = m[0]
 	}
 
-	ts, err := f.parseTime(b)
+	ts, err := f.cb(b)
 	if err != nil {
 		return
 	}
