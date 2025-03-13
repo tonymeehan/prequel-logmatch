@@ -9,7 +9,7 @@ import (
 func TestRegex(t *testing.T) {
 
 	exp := `^\b[A-Z][a-z]{2} [A-Z][a-z]{2} [ _]?\d{1,2} \d{2}:\d{2}:\d{2} \d{4}\b`
-	factory, err := NewRegexFactory(exp, time.ANSIC)
+	factory, err := NewRegexFactory(exp, time.ANSIC, nil)
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)
 	}
@@ -35,7 +35,7 @@ func TestRegex(t *testing.T) {
 func TestRegexReadTimestamp(t *testing.T) {
 
 	exp := `^(\d{2}) ([A-Za-z]{3}) (\d{2}) (\d{2}:\d{2}) ([+-]\d{4})`
-	factory, err := NewRegexFactory(exp, time.RFC822Z)
+	factory, err := NewRegexFactory(exp, time.RFC822Z, nil)
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)
 	}

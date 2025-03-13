@@ -10,17 +10,21 @@ import (
 	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
 )
 
+type CustomCbT func(m []byte) (int64, error)
+
 type regexFmtT struct {
 	expTime *regexp.Regexp
+	cb      CustomCbT
 	fmtTime string
 }
 
 type regexFactoryT struct {
 	expTime *regexp.Regexp
+	cb      CustomCbT
 	fmtTime string
 }
 
-func NewRegexFactory(expTime, fmtTime string) (FactoryI, error) {
+func NewRegexFactory(expTime, fmtTime string, cb CustomCbT) (FactoryI, error) {
 	// Expression must compile
 	exp, err := regexp.Compile(expTime)
 	if err != nil {
@@ -29,6 +33,7 @@ func NewRegexFactory(expTime, fmtTime string) (FactoryI, error) {
 
 	return &regexFactoryT{
 		expTime: exp,
+		cb:      cb,
 		fmtTime: fmtTime,
 	}, nil
 }
@@ -74,10 +79,19 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 }
 
 func (f *regexFmtT) parseTime(m []byte) (ts int64, err error) {
-	t, err := time.Parse(f.fmtTime, string(m))
-	if err != nil {
-		err = errors.Join(ErrParseTimesamp, err)
-		return
+
+	var (
+		t time.Time
+	)
+
+	switch f.cb {
+	case nil:
+		if t, err = time.Parse(f.fmtTime, string(m)); err != nil {
+			err = errors.Join(ErrParseTimesamp, err)
+			return
+		}
+	default:
+		return f.cb(m)
 	}
 
 	return t.UnixNano(), nil
