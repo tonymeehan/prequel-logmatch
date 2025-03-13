@@ -3,7 +3,6 @@ package format
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -63,7 +62,6 @@ func (f *rfc339NanoFmtT) ReadEntry(line []byte) (entry LogEntry, err error) {
 		return
 	}
 
-	fmt.Printf("parsing %s %d\n", string(line), ts.UnixNano())
 	entry.Timestamp = ts.UnixNano()
 
 	entry.Line = string(line[idx+1:])
