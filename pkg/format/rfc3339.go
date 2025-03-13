@@ -64,15 +64,7 @@ func (f *rfc339NanoFmtT) ReadEntry(line []byte) (entry LogEntry, err error) {
 
 	entry.Timestamp = ts.UnixNano()
 
-	line = line[idx+1:]
-	idx = bytes.IndexByte(line, delimiter)
-	if idx < 0 {
-		entry = LogEntry{}
-		err = ErrNoStreamType
-		return
-	}
-
-	entry.Line = string(line)
+	entry.Line = string(line[idx+1:])
 	return
 }
 
