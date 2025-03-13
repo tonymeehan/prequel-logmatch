@@ -2,6 +2,7 @@ package format
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -10,7 +11,11 @@ import (
 	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
 )
 
-type FormatCbT func(exp *regexp.Regexp, m []byte) (int64, error)
+var (
+	ErrNoMatch = errors.New("expected at least one match")
+)
+
+type FormatCbT func(m []byte) (int64, error)
 
 type regexFmtT struct {
 	expTime *regexp.Regexp
@@ -23,7 +28,7 @@ type regexFactoryT struct {
 }
 
 func WithTimeFormat(fmtTime string) FormatCbT {
-	return func(exp *regexp.Regexp, m []byte) (int64, error) {
+	return func(m []byte) (int64, error) {
 		var (
 			t   time.Time
 			err error
@@ -80,14 +85,18 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 
 	if scanner.Scan() {
 
-		m := f.expTime.Find(scanner.Bytes())
+		m := f.expTime.FindSubmatch(scanner.Bytes())
 		if m == nil {
-			fmt.Println("no match")
 			err = ErrNoTimestamp
 			return
 		}
 
-		ts, err = f.parseTime(m)
+		if len(m) == 0 {
+			err = ErrNoTimestamp
+			return
+		}
+
+		ts, err = f.parseTime(m[1])
 
 	} else {
 		err = scanner.Err()
@@ -97,18 +106,35 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 }
 
 func (f *regexFmtT) parseTime(m []byte) (ts int64, err error) {
-	return f.cb(f.expTime, m)
+	return f.cb(m)
 }
 
 // Read custom format
 func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
-	m := f.expTime.Find(data)
+	m := f.expTime.FindSubmatch(data)
 	if m == nil {
 		err = ErrNoTimestamp
 		return
 	}
 
-	ts, err := f.parseTime(m)
+	if len(m) == 0 {
+		err = ErrNoTimestamp
+		return
+	}
+
+	var b []byte
+
+	for i, v := range m {
+		fmt.Printf("i: %d, v: %v\n", i, string(v))
+	}
+
+	if len(m) > 1 {
+		b = m[1]
+	} else {
+		b = m[0]
+	}
+
+	ts, err := f.parseTime(b)
 	if err != nil {
 		return
 	}

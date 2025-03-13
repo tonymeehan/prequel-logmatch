@@ -3,7 +3,6 @@ package format
 import (
 	"bytes"
 	"fmt"
-	"regexp"
 	"strconv"
 	"testing"
 	"time"
@@ -35,9 +34,27 @@ func TestRegex(t *testing.T) {
 	}
 }
 
-func TestRegexReadTimestamp(t *testing.T) {
+func TestRegexReadTimestampFail(t *testing.T) {
 
 	exp := `^(\d{2}) ([A-Za-z]{3}) (\d{2}) (\d{2}:\d{2}) ([+-]\d{4})`
+	factory, err := NewRegexFactory(exp, WithTimeFormat(time.RFC822Z))
+	if err != nil {
+		t.Errorf("Expected nil error got %v", err)
+	}
+
+	f := factory.New()
+
+	line := []byte(`10 Jan 12 15:04 -0700 Testy stamp.`)
+	_, err = f.ReadTimestamp(bytes.NewReader(line))
+
+	if err == nil {
+		t.Errorf("Expected error got nil")
+	}
+}
+
+func TestRegexReadTimestamp(t *testing.T) {
+
+	exp := `(\d{2}\s[A-Za-z]{3}\s\d{2}\s\d{2}:\d{2}\s[-+]\d{4})`
 	factory, err := NewRegexFactory(exp, WithTimeFormat(time.RFC822Z))
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)
@@ -60,13 +77,10 @@ func TestRegexReadTimestamp(t *testing.T) {
 func TestRegexCustomCb(t *testing.T) {
 
 	exp := `"time":(\d{18,19})`
-	cb := func(re *regexp.Regexp, m []byte) (int64, error) {
-		tsStr := re.FindStringSubmatch(string(m))
-		for _, ts := range tsStr {
-			nanoEpoch, err := strconv.ParseInt(ts, 10, 64)
-			if err == nil {
-				return nanoEpoch, nil
-			}
+	cb := func(m []byte) (int64, error) {
+		nanoEpoch, err := strconv.ParseInt(string(m), 10, 64)
+		if err == nil {
+			return nanoEpoch, nil
 		}
 
 		return 0, fmt.Errorf("expected int64")
