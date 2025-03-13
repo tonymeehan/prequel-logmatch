@@ -25,6 +25,7 @@ type DetectFormatFunc func(line []byte) (FactoryI, int64, error)
 var supportedFormats = []DetectFormatFunc{
 	detectJSON,
 	detectCri,
+	detectRFC339Nano,
 }
 
 const (

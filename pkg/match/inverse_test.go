@@ -274,6 +274,35 @@ func TestTonySequence(t *testing.T) {
 	}
 }
 
+func TestTonySequence2(t *testing.T) {
+	window := time.Second * 10
+	iq, err := NewInverseSeq(
+		window,
+		[]string{"Shutdown initiated"},
+		[]string{
+			"Discarding message",
+			"Mnesia overloaded",
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fail constructor: %v", err)
+	}
+
+	// Scan our events, should not fire until timer us up.
+	for _, ev := range replayTonyOK {
+		hits := iq.Scan(ev)
+		testNoFire(t, hits)
+	}
+
+	// fire a noop event, past the window (could also run poll)
+	ev := LogEntry{Timestamp: replayTonyOK[0].Timestamp + int64(window)}
+	hits := iq.Scan(ev)
+
+	if hits.Cnt != 12 {
+		t.Errorf("Expected 3 hits, got: %v", hits.Cnt)
+	}
+}
+
 func TestTonySequenceFail(t *testing.T) {
 	window := time.Second * 10
 	iq, err := NewInverseSeq(
