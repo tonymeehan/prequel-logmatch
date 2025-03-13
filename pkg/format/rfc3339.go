@@ -3,6 +3,7 @@ package format
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -76,6 +77,8 @@ func detectRFC339Nano(line []byte) (FactoryI, int64, error) {
 	if err != nil {
 		return nil, -1, err
 	}
+
+	fmt.Printf("timestamp: %d\n", entry.Timestamp)
 
 	return &rfc339NanoFactoryT{}, entry.Timestamp, nil
 }
