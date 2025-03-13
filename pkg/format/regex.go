@@ -15,19 +15,19 @@ var (
 	ErrNoMatch = errors.New("expected at least one match")
 )
 
-type FormatCbT func(m []byte) (int64, error)
+type TimeFormatCbT func(m []byte) (int64, error)
 
 type regexFmtT struct {
 	expTime *regexp.Regexp
-	cb      FormatCbT
+	cb      TimeFormatCbT
 }
 
 type regexFactoryT struct {
 	expTime *regexp.Regexp
-	cb      FormatCbT
+	cb      TimeFormatCbT
 }
 
-func WithTimeFormat(fmtTime string) FormatCbT {
+func WithTimeFormat(fmtTime string) TimeFormatCbT {
 	return func(m []byte) (int64, error) {
 		var (
 			t   time.Time
@@ -42,7 +42,7 @@ func WithTimeFormat(fmtTime string) FormatCbT {
 	}
 }
 
-func NewRegexFactory(expTime string, cb FormatCbT) (FactoryI, error) {
+func NewRegexFactory(expTime string, cb TimeFormatCbT) (FactoryI, error) {
 
 	var (
 		exp *regexp.Regexp
