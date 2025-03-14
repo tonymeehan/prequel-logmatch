@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/prequel-dev/prequel-logmatch/pkg/entry"
 
@@ -18,7 +17,6 @@ import (
 type Matcher interface {
 	Scan(e entry.LogEntry) Hits
 	State() []byte
-	Poll() (Hits, time.Duration)
 }
 
 type LogEntry = entry.LogEntry
@@ -44,14 +42,19 @@ func (h *Hits) PopFront() []LogEntry {
 }
 
 func (h Hits) Last() []LogEntry {
-	if h.Cnt <= 0 {
+	return h.Index(h.Cnt - 1)
+}
+
+func (h Hits) Index(i int) []LogEntry {
+	if i >= h.Cnt {
 		return nil
 	}
-
 	var (
-		sz = len(h.Logs) / h.Cnt
+		nLogs = len(h.Logs)
+		sz    = nLogs / h.Cnt
+		off   = i * sz
 	)
-	return h.Logs[len(h.Logs)-sz : len(h.Logs)]
+	return h.Logs[off : off+sz]
 }
 
 type MatchFunc func(string) bool
