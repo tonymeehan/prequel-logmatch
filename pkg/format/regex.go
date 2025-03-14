@@ -106,7 +106,9 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 	m := f.expTime.FindSubmatch(data)
 
-	fmt.Printf("m: %v\n", m)
+	for i, v := range m {
+		fmt.Printf("i: %d, v: %v\n", i, string(v))
+	}
 
 	if len(m) <= 1 {
 		err = ErrNoTimestamp
