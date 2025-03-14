@@ -3,6 +3,7 @@ package format
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
 	"time"
@@ -85,6 +86,8 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	if scanner.Scan() {
 
 		m := f.expTime.FindSubmatch(scanner.Bytes())
+
+		fmt.Printf("m: %v\n", m)
 		if len(m) <= 1 {
 			err = ErrNoTimestamp
 			return
