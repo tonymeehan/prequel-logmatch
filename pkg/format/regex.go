@@ -3,7 +3,6 @@ package format
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"regexp"
 	"time"
@@ -84,10 +83,7 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	// if it encounters a line that is > o.maxSz.
 
 	if scanner.Scan() {
-
 		m := f.expTime.FindSubmatch(scanner.Bytes())
-
-		fmt.Printf("m: %v\n", m)
 		if len(m) <= 1 {
 			err = ErrNoTimestamp
 			return
@@ -105,11 +101,6 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 // Read custom format
 func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 	m := f.expTime.FindSubmatch(data)
-
-	for i, v := range m {
-		fmt.Printf("i: %d, v: %v\n", i, string(v))
-	}
-
 	if len(m) <= 1 {
 		err = ErrNoTimestamp
 		return
