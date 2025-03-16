@@ -1,8 +1,6 @@
 package match
 
 import (
-	"time"
-
 	"github.com/prequel-dev/prequel-logmatch/pkg/entry"
 )
 
@@ -26,13 +24,5 @@ func (r *MatchSingle) Scan(e entry.LogEntry) (hits Hits) {
 		hits.Logs = []entry.LogEntry{e}
 	}
 
-	return
-}
-
-func (r *MatchSingle) State() []byte {
-	return nil
-}
-
-func (r *MatchSingle) Poll() (h Hits, d time.Duration) {
 	return
 }
