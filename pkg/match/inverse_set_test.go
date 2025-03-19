@@ -21,8 +21,8 @@ func TestSetInverseBadReset(t *testing.T) {
 	)
 
 	_, err := NewInverseSet(window, []string{"alpha", "beta"}, resets)
-	if err != errAnchorRange {
-		t.Fatalf("Expected err == errAnchorRange, got %v", err)
+	if err != ErrAnchorRange {
+		t.Fatalf("Expected err == ErrAnchorRange, got %v", err)
 	}
 }
 

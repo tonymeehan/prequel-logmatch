@@ -43,7 +43,7 @@ func NewInverseSeq(window int64, seqTerms []string, resetTerms []ResetT) (*Inver
 			case err != nil:
 				return nil, err
 			case int(term.Anchor) >= len(seqTerms):
-				return nil, errAnchorRange
+				return nil, ErrAnchorRange
 			}
 
 			resets = append(resets, resetT{

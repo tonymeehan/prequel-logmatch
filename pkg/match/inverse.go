@@ -3,7 +3,8 @@ package match
 import "errors"
 
 var (
-	errAnchorRange = errors.New("anchor out of range")
+	ErrAnchorRange  = errors.New("anchor out of range")
+	ErrTooManyTerms = errors.New("too many terms")
 )
 
 var capThreshold = 4
