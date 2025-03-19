@@ -214,8 +214,16 @@ func TestSetInverseManualEval(t *testing.T) {
 	hits = iq.Scan(LogEntry{Timestamp: clock + 2, Line: "beta"})
 	testNoFire(t, hits)
 
-	hits = iq.Eval(clock + 10000)
+	// clock + rWindow == 21
+	// First events is at 1. So we are still within the reset window.
+	hits = iq.Eval(clock + rWindow)
+	if hits.Cnt != 0 {
+		t.Errorf("Expected 0 hits, got: %v", hits.Cnt)
+	}
 
+	// clock + rWindow + 1== 22
+	// First events is at 1. So we are now oustide the reset window.
+	hits = iq.Eval(clock + rWindow + 1)
 	if hits.Cnt != 1 {
 		t.Fatalf("Expected 1 hits, got: %v", hits.Cnt)
 	}
@@ -635,6 +643,13 @@ func TestSetInverseRelative(t *testing.T) {
 
 }
 
+//*****
+//-A--------
+//-----B----
+
+// Simple absolute window HIT test.
+// Should not fire until absolute window ends.
+
 func TestSetInverseAbsoluteHit(t *testing.T) {
 	var (
 		clock     = time.Now().UnixNano()
@@ -686,7 +701,6 @@ func TestSetInverseAbsoluteHit(t *testing.T) {
 	ev4 := LogEntry{Timestamp: clock + absWindow, Line: "NOOP"}
 	hits = iq.Scan(ev4)
 
-	// Should not hit  until the absolute window is up
 	if hits.Cnt != 1 {
 		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
 	}
@@ -923,10 +937,16 @@ func TestSetInverseGCOldSecondaryTerms(t *testing.T) {
 	hits = sm.Scan(ev12)
 	testNoFire(t, hits)
 
+	sm.GarbageCollect(clock + window)
+
+	if sm.hotMask.Zeros() {
+		t.Errorf("Expected non empty state")
+	}
+
 	sm.GarbageCollect(clock + window + 1)
 
 	if !sm.hotMask.Zeros() {
-		t.Errorf("Expected empty state")
+		t.Errorf("Expected  empty state")
 	}
 }
 
@@ -994,9 +1014,10 @@ func TestSetInverseResetsAreGCed(t *testing.T) {
 
 	// Fire the bad term N times
 	for range N {
-		clock += 1
+
 		hits := sm.Scan(LogEntry{Timestamp: clock, Line: "badterm"})
 		testNoFire(t, hits)
+		clock += 1
 	}
 
 	// Negative terms with nothing hot w/o lookback have been optimized out.
