@@ -1,7 +1,6 @@
 package match
 
 import (
-	"errors"
 	"math"
 	"slices"
 
@@ -23,7 +22,7 @@ type InverseSet struct {
 func NewInverseSet(window int64, setTerms []string, resetTerms []ResetT) (*InverseSet, error) {
 
 	if len(setTerms) > 64 {
-		return nil, errors.New("inverse set terms exceed 64")
+		return nil, ErrTooManyTerms
 	}
 
 	var (
@@ -48,7 +47,7 @@ func NewInverseSet(window int64, setTerms []string, resetTerms []ResetT) (*Inver
 			case err != nil:
 				return nil, err
 			case int(term.Anchor) >= len(setTerms):
-				return nil, errAnchorRange
+				return nil, ErrAnchorRange
 			}
 
 			resets = append(resets, resetT{
