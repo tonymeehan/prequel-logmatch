@@ -199,11 +199,10 @@ func (r *InverseSeq) GarbageCollect(clock int64) {
 	// Find the first term that is not older than the window.
 	// Binary search?
 	for _, term := range m {
-		if term.Timestamp < deadline {
-			cnt++
-		} else {
+		if term.Timestamp >= deadline {
 			break
 		}
+		cnt += 1
 	}
 
 	if cnt > 0 {
@@ -230,11 +229,7 @@ func (r *InverseSeq) GarbageCollect(clock int64) {
 			continue
 		}
 
-		cnt, ok := slices.BinarySearch(m, deadline)
-
-		if ok {
-			cnt += 1
-		}
+		cnt, _ := slices.BinarySearch(m, deadline)
 
 		if cnt > 0 {
 			r.resets[i].resets = m[cnt:]
@@ -273,11 +268,10 @@ func (r *InverseSeq) miniGC() {
 		var cnt int
 
 		for _, term := range r.terms[i].asserts {
-			if term.Timestamp <= zeroMatch {
-				cnt++
-			} else {
+			if term.Timestamp >= zeroMatch {
 				break
 			}
+			cnt += 1
 		}
 
 		if cnt > 0 {

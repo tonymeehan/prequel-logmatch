@@ -818,10 +818,10 @@ func TestSeqInverseDupes(t *testing.T) {
 	}
 
 	// Should fail out of window;
-	// clock+5 is the last hot zero event in the window,
+	// clock+6 is the last hot zero event in the window,
 	// (if we were doing strict sequential, clock+4 would be the last hot event)
 	// adding sWindow + 1 should be out of window.
-	hits = iq.Scan(LogEntry{Timestamp: clock + 5 + sWindow + 1, Line: "Mnesia overloaded"})
+	hits = iq.Scan(LogEntry{Timestamp: clock + 6 + sWindow + 1, Line: "Mnesia overloaded"})
 
 	if hits.Cnt != 0 {
 		t.Errorf("Expected 0 hits, got: %v", hits.Cnt)
@@ -1051,7 +1051,7 @@ func TestSeqInverseGCOldSecondaryTerms(t *testing.T) {
 		t.Errorf("Fail log match")
 	}
 
-	sm.GarbageCollect(clock + window)
+	sm.GarbageCollect(clock + window + 1)
 
 	if sm.nActive != 0 {
 		t.Errorf("Expected empty state")
@@ -1114,9 +1114,9 @@ func TestSeqInverseNegativesAreGCed(t *testing.T) {
 
 	// Fire the bad term N times
 	for range N {
-		clock += 1
 		hits := sm.Scan(LogEntry{Timestamp: clock, Line: "badterm"})
 		testNoFire(t, hits)
+		clock += 1
 	}
 
 	// Negative terms with nothing hot w/o lookback have been optimized out.

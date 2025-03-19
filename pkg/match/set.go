@@ -97,11 +97,10 @@ func (r *MatchSet) GarbageCollect(clock int64) {
 		var cnt int
 
 		for _, assert := range term.asserts {
-			if assert.Timestamp < deadline {
-				cnt++
-			} else {
+			if assert.Timestamp >= deadline {
 				break
 			}
+			cnt += 1
 		}
 
 		if cnt > 0 {

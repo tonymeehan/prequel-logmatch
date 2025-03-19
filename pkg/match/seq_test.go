@@ -492,9 +492,9 @@ func TestSeqDupes(t *testing.T) {
 
 	// Should fail out of window;
 	// clock+5 is the last hot zero event in the window,
-	// (if we were doing strict sequential, clock+4 would be the last hot event)
+	// (if we were doing strict sequential, clock+6 would be the last hot event)
 	// adding sWindow + 1 should be out of window.
-	hits = iq.Scan(LogEntry{Timestamp: clock + 5 + sWindow + 1, Line: "Mnesia overloaded"})
+	hits = iq.Scan(LogEntry{Timestamp: clock + 6 + sWindow + 1, Line: "Mnesia overloaded"})
 
 	if hits.Cnt != 0 {
 		t.Errorf("Expected 0 hits, got: %v", hits.Cnt)

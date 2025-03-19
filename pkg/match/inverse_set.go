@@ -290,11 +290,7 @@ func (r *InverseSet) GarbageCollect(clock int64) {
 			continue
 		}
 
-		cnt, ok := slices.BinarySearch(m, deadline)
-
-		if ok {
-			cnt += 1
-		}
+		cnt, _ := slices.BinarySearch(m, deadline)
 
 		if cnt > 0 {
 			r.resets[i].resets = m[cnt:]

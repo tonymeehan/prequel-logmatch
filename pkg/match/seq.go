@@ -114,11 +114,10 @@ func (r *MatchSeq) GarbageCollect(clock int64) {
 
 	// Find the first term that is not older than the window.
 	for _, term := range m {
-		if term.Timestamp < deadline {
-			cnt++
-		} else {
+		if term.Timestamp >= deadline {
 			break
 		}
+		cnt += 1
 	}
 
 	if cnt > 0 {
@@ -148,11 +147,10 @@ func (r *MatchSeq) miniGC() {
 			m   = r.terms[i].asserts
 		)
 		for _, term := range m {
-			if term.Timestamp <= zeroMatch {
-				cnt++
-			} else {
+			if term.Timestamp >= zeroMatch {
 				break
 			}
+			cnt += 1
 		}
 
 		if cnt > 0 {
