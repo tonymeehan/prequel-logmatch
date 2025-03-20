@@ -16,7 +16,6 @@ import (
 
 type Matcher interface {
 	Scan(e entry.LogEntry) Hits
-	State() []byte
 }
 
 type LogEntry = entry.LogEntry
@@ -64,7 +63,7 @@ func makeMatchFunc(s string) (m MatchFunc, err error) {
 	switch {
 	case strings.HasPrefix(s, "jq_"):
 		if m, err = makeJqMatch(s); err != nil {
-			err = fmt.Errorf("faiil jq compile '%s': %w", s, err)
+			err = fmt.Errorf("fail jq compile '%s': %w", s, err)
 		}
 	case isRegex(s):
 		if m, err = makeRegexMatch(s); err != nil {
