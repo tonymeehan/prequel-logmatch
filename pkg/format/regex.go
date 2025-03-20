@@ -10,32 +10,57 @@ import (
 	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
 )
 
+var (
+	ErrNoMatch = errors.New("expected at least one match")
+)
+
+type TimeFormatCbT func(m []byte) (int64, error)
+
 type regexFmtT struct {
 	expTime *regexp.Regexp
-	fmtTime string
+	cb      TimeFormatCbT
 }
 
 type regexFactoryT struct {
 	expTime *regexp.Regexp
-	fmtTime string
+	cb      TimeFormatCbT
 }
 
-func NewRegexFactory(expTime, fmtTime string) (FactoryI, error) {
+func WithTimeFormat(fmtTime string) TimeFormatCbT {
+	return func(m []byte) (int64, error) {
+		var (
+			t   time.Time
+			err error
+		)
+
+		if t, err = time.Parse(fmtTime, string(m)); err != nil {
+			return 0, err
+		}
+
+		return t.UnixNano(), nil
+	}
+}
+
+func NewRegexFactory(expTime string, cb TimeFormatCbT) (FactoryI, error) {
+
+	var (
+		exp *regexp.Regexp
+		err error
+	)
+
 	// Expression must compile
-	exp, err := regexp.Compile(expTime)
-	if err != nil {
+	if exp, err = regexp.Compile(expTime); err != nil {
 		return nil, err
 	}
 
 	return &regexFactoryT{
 		expTime: exp,
-		fmtTime: fmtTime,
+		cb:      cb,
 	}, nil
 }
 
 func (f *regexFactoryT) New() ParserI {
-
-	return &regexFmtT{expTime: f.expTime, fmtTime: f.fmtTime}
+	return &regexFmtT{expTime: f.expTime, cb: f.cb}
 }
 
 func (f *regexFactoryT) String() string {
@@ -58,13 +83,13 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	// if it encounters a line that is > o.maxSz.
 
 	if scanner.Scan() {
-		m := f.expTime.Find(scanner.Bytes())
-		if m == nil {
+		m := f.expTime.FindSubmatch(scanner.Bytes())
+		if len(m) <= 1 {
 			err = ErrNoTimestamp
 			return
 		}
 
-		ts, err = f.parseTime(m)
+		ts, err = f.cb(m[1])
 
 	} else {
 		err = scanner.Err()
@@ -73,26 +98,15 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	return
 }
 
-func (f *regexFmtT) parseTime(m []byte) (ts int64, err error) {
-	t, err := time.Parse(f.fmtTime, string(m))
-	if err != nil {
-		err = errors.Join(ErrParseTimesamp, err)
-		return
-	}
-
-	return t.UnixNano(), nil
-}
-
 // Read custom format
-
 func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
-	m := f.expTime.Find(data)
-	if m == nil {
+	m := f.expTime.FindSubmatch(data)
+	if len(m) <= 1 {
 		err = ErrNoTimestamp
 		return
 	}
 
-	ts, err := f.parseTime(m)
+	ts, err := f.cb(m[1])
 	if err != nil {
 		return
 	}
