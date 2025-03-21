@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func TestSetInverseBadReset(t *testing.T) {
+func TestSetInverseBadAnchor(t *testing.T) {
 	var (
 		window int64 = 10
 
@@ -26,1073 +26,594 @@ func TestSetInverseBadReset(t *testing.T) {
 	}
 }
 
-func TestSetInverseSingle(t *testing.T) {
+func TestSetInverse(t *testing.T) {
 
-	var (
-		clock  int64 = 0
-		window int64 = 10
-	)
-	sm, err := NewInverseSet(window, []string{"alpha"}, nil)
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+1 {
-		t.Errorf("Expected 3,4,5,8 got: %v", hits)
-	}
-}
-
-// -*****************
-// A--------E-------
-// -----C-------G-H--
-// --B-----D--F------
-
-// Should see {A,C,B, {E,G,D}
-func TestSetInverseSimple(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 50
-	)
-	sm, err := NewInverseSet(window, []string{"alpha", "beta", "gamma"}, nil)
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 2, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 3, Line: "beta"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+1 || hits.Logs[1].Timestamp != clock+3 || hits.Logs[2].Timestamp != clock+2 {
-		t.Errorf("Expected 1,2,3 got: %v", hits)
-	}
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 4, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 5, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 6, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 7, Line: "beta"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+5 || hits.Logs[1].Timestamp != clock+7 || hits.Logs[2].Timestamp != clock+4 {
-		t.Errorf("Expected 4,6,5 got: %v", hits)
-	}
-
-	if sm.hotMask != 0b100 {
-		t.Errorf("Expected hotMask == 0b100, got %b", sm.hotMask)
-	}
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 8, Line: "beta"})
-	testNoFire(t, hits)
-
-	if sm.hotMask != 0b110 {
-		t.Errorf("Expected hotMask == 0b110, got %b", sm.hotMask)
-	}
-
-}
-
-// -*****************
-// A----------D------
-// --------C---------
-// -----B-------E----
-
-// With window of 5. should see {D,C,B}
-func TestSetInverseWindow(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 5
-	)
-	sm, err := NewInverseSet(window, []string{"alpha", "beta", "gamma"}, nil)
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 4, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 7, Line: "beta"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 8, Line: "alpha"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+8 || hits.Logs[1].Timestamp != clock+7 || hits.Logs[2].Timestamp != clock+4 {
-		t.Errorf("Expected 1,2,3 got: %v", hits)
-	}
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 9, Line: "gamma"})
-	testNoFire(t, hits)
-
-	if sm.hotMask != 0b100 {
-		t.Errorf("Expected hotMask == 0b100, got %b", sm.hotMask)
-	}
-}
-
-// Dupe timestamps are tolerated.
-func TestSetInverseDupeTimestamps(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 5
-	)
-	sm, err := NewInverseSet(window, []string{"alpha", "beta", "gamma"}, nil)
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 1, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 1, Line: "beta"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-}
-
-// *********************
-// -A-------------------
-// --B------------------
-// ---------------------
-// Create a match with an inverse that has a long reset window.
-// Should still fire even if the last emitted time is way out of window.
-func TestSetInverseManualEval(t *testing.T) {
-	var (
-		clock   int64 = 1
-		sWindow int64 = 10
-		rWindow int64 = 20
-	)
-
-	iq, err := NewInverseSet(
-		sWindow,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{
-				Term:     "Shutdown initiated",
-				Window:   rWindow,
-				Absolute: true,
+	var tests = map[string]struct {
+		clock  int64
+		window int64
+		terms  []string
+		reset  []ResetT
+		steps  []stepT
+	}{
+		"SingleTerm": {
+			window: 10,
+			terms:  []string{"alpha"},
+			steps: []stepT{
+				{line: "alpha", cb: matchStamps(1)},
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Emit valid sequence in order, should not fire until inverse timer
-	hits := iq.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = iq.Scan(LogEntry{Timestamp: clock + 2, Line: "beta"})
-	testNoFire(t, hits)
-
-	// clock + rWindow == 21
-	// First events is at 1. So we are still within the reset window.
-	hits = iq.Eval(clock + rWindow)
-	if hits.Cnt != 0 {
-		t.Errorf("Expected 0 hits, got: %v", hits.Cnt)
-	}
-
-	// clock + rWindow + 1== 22
-	// First events is at 1. So we are now oustide the reset window.
-	hits = iq.Eval(clock + rWindow + 1)
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected 1 hits, got: %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+1 ||
-		hits.Logs[1].Timestamp != clock+2 {
-		t.Errorf("Expected 1,2 got: %v", hits)
-	}
-}
-
-// -**********
-// --A--------D---
-// ----B---C------
-// -R------------
-
-// Slide left, deny first set, allow second set.
-// Should deny {A,B}, {A,C}, but allow {D,B}
-
-func TestSetInverseSlideLeft(t *testing.T) {
-	var (
-		clock     int64 = 0
-		window    int64 = 10
-		slide     int64 = -5
-		absWindow int64 = 5
-	)
-	iq, err := NewInverseSet(
-		window,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{
-				Term:     "badterm1",
-				Slide:    slide,
-				Window:   absWindow,
-				Absolute: true,
+		"SimpleNoReset": {
+			// A--------E-------
+			// -----C-------G-H--
+			// --B-----D--F------
+			// Should see {A,C,B} {E,G,D}
+			window: 50,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []stepT{
+				{line: "alpha"},
+				{line: "gamma"},
+				{line: "beta", cb: matchStamps(1, 3, 2)},
+				{line: "gamma"},
+				{line: "alpha"},
+				{line: "gamma"},
+				{line: "beta", cb: matchStamps(5, 7, 4), postF: checkHotMask(0b100)},
+				{line: "beta", postF: checkHotMask(0b110)},
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Fire a negative term slightly outside of the left slide.
-	nv1 := LogEntry{Timestamp: clock, Line: "badterm1"}
-	hits := iq.Scan(nv1)
-	testNoFire(t, hits)
-
-	// Scan first matcher right on the slide boundary
-	ev1 := LogEntry{Timestamp: clock + absWindow, Line: "Match alpha."}
-	hits = iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan first matcher right on the slide boundary; should fail due to slide.
-	ev2 := LogEntry{Timestamp: clock + absWindow + 1, Line: "Match beta."}
-	hits = iq.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Ok let's fire again now passed the slide window. Should come through.
-
-	// Scan first matcher right on the slide boundary
-	ev3 := LogEntry{Timestamp: clock + absWindow + 2, Line: "Match beta."}
-	hits = iq.Scan(ev3)
-	testNoFire(t, hits)
-
-	// Scan first matcher right on the slide boundary; should fail due to slide.
-	ev4 := LogEntry{Timestamp: clock + absWindow + 3, Line: "Match alpha."}
-	hits = iq.Scan(ev4)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev4, ev2}) {
-		t.Errorf("Fail logs equal")
-	}
-}
-
-// Event order: A,B,C
-// -**********
-// -A-------------
-// --B------------
-// ---C-----------
-// -------------R-
-
-// Setup a reset window, and assert reset at end of window.  Should not fire.
-
-func TestSetInverseRelativeResetWindowMiss(t *testing.T) {
-	var (
-		clock   int64 = 1
-		sWindow int64 = 3
-		rWindow int64 = 10
-	)
-
-	iq, err := NewInverseSet(
-		sWindow,
-		[]string{"alpha", "beta", "gamma"},
-		[]ResetT{
-			{
-				Term:   "reset",
-				Window: rWindow,
+		"WindowNoReset": {
+			// A----------D------
+			// --------C---------
+			// -----B-------E----
+			// With window of 5. should see {D,C,B}
+			window: 5,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []stepT{
+				{line: "alpha"},
+				{line: "gamma", stamp: 4},
+				{line: "beta", stamp: 7},
+				{line: "alpha", stamp: 8, cb: matchStamps(8, 7, 4)},
+				{line: "gamma", stamp: 9, postF: checkHotMask(0b100)},
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Scan first matcher
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan first matcher
-	ev2 := LogEntry{Timestamp: clock + 1, Line: "Match beta."}
-	hits = iq.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Scan third matcher; should fire the seqeuence but delay on reset
-	ev3 := LogEntry{Timestamp: clock + 2, Line: "Match gamma"}
-	hits = iq.Scan(ev3)
-	testNoFire(t, hits)
-
-	// Eval current time, should not fire.
-	hits = iq.Eval(clock + 2)
-	testNoFire(t, hits)
-
-	// Assert reset event immediately before window
-	clock += 11
-	rv1 := LogEntry{Timestamp: clock, Line: "Match reset"}
-	hits = iq.Scan(rv1)
-	testNoFire(t, hits)
-
-	// Eval much later; should have reset
-	hits = iq.Eval(clock + 50)
-	testNoFire(t, hits)
-}
-
-//***
-// -A-------C------
-// --B-------D-----
-// -----R-----------
-
-// Should fail {A,B} on R, but fire {C,D} after absolute timeout.
-
-func TestSetInverseSlideRight(t *testing.T) {
-	var (
-		clock     int64 = 0
-		window    int64 = 10
-		slide     int64 = 20
-		absWindow int64 = 15
-	)
-	iq, err := NewInverseSet(
-		window,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{
-				Term:     "badterm1",
-				Slide:    slide,
-				Window:   absWindow,
-				Absolute: true,
+		"DupeTimestamps": {
+			// -A----------------
+			// -B----------------
+			// -C----------------
+			// Dupe timestamps are tolerated.
+			window: 5,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []stepT{
+				{line: "alpha", stamp: 1},
+				{line: "gamma", stamp: 1},
+				{line: "beta", stamp: 1, cb: matchStamps(1, 1, 1)},
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Scan first matcher
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan first matcher
-	ev2 := LogEntry{Timestamp: clock + 1, Line: "Match beta."}
-	hits = iq.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Fire a negative term within the window slide window.
-	// This should negate the first match
-	nv1 := LogEntry{Timestamp: clock + absWindow + slide - 1, Line: "badterm1"}
-	hits = iq.Scan(nv1)
-	testNoFire(t, hits)
-
-	// Ok let's fire again now passed the slide window. Should come through.
-
-	// Scan first matcher right on the slide boundary
-	clock = absWindow + slide
-
-	ev3 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits = iq.Scan(ev3)
-	testNoFire(t, hits)
-
-	// Scan first matcher right on the slide boundary; should fail due to slide.
-	ev4 := LogEntry{Timestamp: clock + 1, Line: "Match beta."}
-	hits = iq.Scan(ev4)
-	testNoFire(t, hits) // Can't fire until past the slide window
-
-	ev5 := LogEntry{Timestamp: clock + absWindow + slide - 1, Line: "NOOP"}
-	hits = iq.Scan(ev5)
-	testNoFire(t, hits) // Can't fire until past the slide window
-
-	// Should be good now
-	ev6 := LogEntry{Timestamp: clock + absWindow + slide, Line: "NOOP"}
-	hits = iq.Scan(ev6)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev3, ev4}) {
-		t.Errorf("Fail logs equal")
-	}
-}
-
-func TestSetInverseSlideAnchor(t *testing.T) {
-	var (
-		clock     = time.Now().UnixNano()
-		window    = int64(time.Millisecond * 500)
-		absWindow = int64(time.Minute)
-	)
-	iq, err := NewInverseSet(
-		window,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{
-				Term:     "badterm1",
-				Window:   absWindow,
-				Absolute: true,
-				Anchor:   1,
+		"ManualEval": {
+			// -A-------------------
+			// --B------------------
+			// ---------------------
+			// Create a match with an inverse that has a long reset window.
+			clock:  0,
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "Shutdown initiated",
+					Window:   20,
+					Absolute: true,
+				},
+			},
+			steps: []stepT{
+				{line: "alpha"},
+				{line: "beta", postF: checkEval(20, checkNoFire)}, // clock + rWindow == 20, within reset window
+				{postF: checkEval(21, matchStamps(1, 2))},         // clock + rWindow + 1== 21, outside reset window
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Scan first matcher
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan first matcher
-	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
-	hits = iq.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Should not fire as we are still beneath the shifted window
-	ev3 := LogEntry{Timestamp: clock + int64(window) + absWindow - 1, Line: "Nope"}
-	hits = iq.Scan(ev3)
-	testNoFire(t, hits)
-
-	// Should should fire as we are outside window
-	ev4 := LogEntry{Timestamp: clock + int64(window) + absWindow, Line: "Nope"}
-	hits = iq.Scan(ev4)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
-		t.Errorf("Fail logs equal")
-	}
-}
-
-// Event order: A,R,B,C
-// -**********
-// -A-----------
-// ---B---------
-// -----C---D---
-// --R----------
-
-// Anchor absolute reset window with neg slide  on line 2
-// Should disallow A,B,C, but A,B,D should fire
-
-func TestSetInverseAbsSlideResetContinue(t *testing.T) {
-
-	var (
-		clock   int64 = 1
-		sWindow int64 = 50
-		rWindow int64 = 5
-		slide   int64 = -5
-	)
-
-	iq, err := NewInverseSet(
-		sWindow,
-		[]string{"alpha", "beta", "gamma"},
-		[]ResetT{
-			{
-				Term:     "reset",
-				Window:   rWindow,
-				Absolute: true,
-				Anchor:   2,
-				Slide:    slide,
+		"SlideLeft": {
+			// -----A--D----  Alpha
+			// ------BC-----  Beta
+			// -R-----------  Reset line
+			//  *****         Reset Window
+			// Slide left, deny first set, allow second set.
+			// Should deny {A,B}, {A,C}, but allow {D,B}
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Slide:    -5,
+					Window:   5,
+					Absolute: true,
+				},
+			},
+			steps: []stepT{
+				{line: "reset"},
+				{line: "Match alpha.", stamp: 6},                        // clock + reset window, inside reset winow
+				{line: "Match beta.", stamp: 7},                         // clock + reset window + 1, outside reset window
+				{line: "Match beta.", stamp: 8},                         // clock + reset window + 2, outside reset window
+				{line: "Match alpha.", stamp: 9, cb: matchStamps(9, 7)}, // clock + reset window + 3, should fire
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Scan first matcher
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	rv1 := LogEntry{Timestamp: clock + 1, Line: "Match reset."}
-	hits = iq.Scan(rv1)
-	testNoFire(t, hits)
-
-	// Scan second matcher
-	ev2 := LogEntry{Timestamp: clock + 2, Line: "Match beta."}
-	hits = iq.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Should not fire as we are still beneath the shifted window
-	ev3 := LogEntry{Timestamp: clock + 3, Line: "Match gamma"}
-	hits = iq.Scan(ev3)
-	testNoFire(t, hits)
-
-	// Should  fire as we are outside window on inverse term
-	ev4 := LogEntry{Timestamp: clock + 10, Line: "Match gamma"}
-	hits = iq.Scan(ev4)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-}
-
-//***
-//-1-3-------8--
-//--2--5-6----9-
-//----4----7---
-
-// Two relative resets.
-// {1,2} should fire.
-// {8,9} should fire
-
-func TestSetInverseRelative(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 50
-	)
-
-	iq, err := NewInverseSet(
-		window,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{Term: "badterm1"},
-			{Term: "badterm2"},
-		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
-
-	// Scan first matcher
-	clock += 1
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan second matcher
-	clock += 1
-	ev2 := LogEntry{Timestamp: clock, Line: "Match beta."}
-	hits = iq.Scan(ev2)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
-		t.Errorf("Fail logs equal")
-	}
-
-	// Now fire another start event; nothing should fire
-	clock += 1
-	ev3 := LogEntry{Timestamp: clock, Line: "Match alpha part deux."}
-	hits = iq.Scan(ev3)
-	testNoFire(t, hits)
-
-	// Fire a inverse event
-	clock += 1
-	ev4 := LogEntry{Timestamp: clock, Line: "This is badterm1"}
-	hits = iq.Scan(ev4)
-	testNoFire(t, hits)
-
-	// Fire end event, it should not fire due to inverse above
-	clock += 1
-	ev5 := LogEntry{Timestamp: clock, Line: "beta my friend"}
-	hits = iq.Scan(ev5)
-	testNoFire(t, hits)
-
-	// Similarly this should fail because start was removed from  matcher
-	clock += 1
-	ev6 := LogEntry{Timestamp: clock, Line: "beta my friend"}
-	hits = iq.Scan(ev6)
-	testNoFire(t, hits)
-
-	// Fire a inverse event
-	clock += 1
-	ev7 := LogEntry{Timestamp: clock, Line: "This is badterm2"}
-	hits = iq.Scan(ev7)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev8 := LogEntry{Timestamp: clock, Line: "Match alpha part trois."}
-	hits = iq.Scan(ev8)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev9 := LogEntry{Timestamp: clock, Line: "beta again"}
-	hits = iq.Scan(ev9)
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev8, ev9}) {
-		t.Errorf("Fail logs equal")
-	}
-
-}
-
-//*****
-//-A--------
-//-----B----
-
-// Simple absolute window HIT test.
-// Should not fire until absolute window ends.
-
-func TestSetInverseAbsoluteHit(t *testing.T) {
-	var (
-		clock     = time.Now().UnixNano()
-		window    = int64(time.Millisecond * 500)
-		absWindow = int64(time.Second)
-	)
-
-	iq, err := NewInverseSet(
-		window,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{Term: "badterm1"},
-			{Term: "badterm2"},
-			{
-				Term:     "badterm3",
-				Absolute: true,
-				Window:   absWindow,
+		"SlideRight": {
+			// -A---------C----
+			// --B-------D-----
+			// -----R----------
+			// Should fail {A,B} on R, but fire {D,C} after absolute timeout.
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Slide:    20,
+					Window:   15,
+					Absolute: true,
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta."},                              // Should not fire due to future reset
+				{line: "reset", stamp: 35},                         // reset window + slide -1
+				{line: "Match beta.", stamp: 36},                   // First term out of reset window
+				{line: "Match alpha.", stamp: 37},                  // reset window + slide, should not fire
+				{line: "NOOP", stamp: 70},                          // 2 * (reset window + slide)
+				{line: "NOOP", stamp: 71, cb: matchStamps(37, 36)}, // 2 * (reset window + slide) + 1, window expires
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Scan first matcher
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan second matcher, exactly within the window.
-	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
-	hits = iq.Scan(ev2)
-
-	// Should not hit  until the absolute window is up
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
-	}
-
-	// Assert log one nanosecond before the absolute window
-	ev3 := LogEntry{Timestamp: clock + absWindow - 1, Line: "NOOP"}
-	hits = iq.Scan(ev3)
-
-	// Should not hit  until the absolute window is up
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
-	}
-
-	// Now assert log at exactly the absolute window, should fire
-	ev4 := LogEntry{Timestamp: clock + absWindow, Line: "NOOP"}
-	hits = iq.Scan(ev4)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
-		t.Errorf("Fail logs equal")
-	}
-}
-
-// Create an absolute window and fire an inverse into that window. Should drop.
-func TestSetInverseAbsoluteMiss(t *testing.T) {
-	var (
-		clock     = time.Now().UnixNano()
-		window    = int64(time.Millisecond * 500)
-		absWindow = int64(time.Second)
-	)
-
-	iq, err := NewInverseSet(
-		window,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{Term: "badterm1"},
-			{Term: "badterm2"},
-			{
-				Term:     "badterm3",
-				Absolute: true,
-				Window:   absWindow,
+		"RelativeResetWindowMiss": {
+			// -A-------------
+			// --B------------
+			// ---C-----------
+			// -------------R-
+			// Setup a relative reset window, and assert reset at end of window.  Should not fire.
+			window: 3,
+			terms:  []string{"alpha", "beta", "gamma"},
+			reset: []ResetT{
+				{
+					Term:   "reset",
+					Window: 10,
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta."},
+				{line: "Match gamma", postF: checkEval(2, checkNoFire)},
+				{line: "Match reset", stamp: 11, postF: checkEval(50, checkNoFire)},
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Scan first matcher
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan second matcher, exactly within the window.
-	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
-	hits = iq.Scan(ev2)
-
-	// Should not hit  until the absolute window is up
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
-	}
-
-	// Fire a negative term into the absolute window
-	nv := LogEntry{Timestamp: clock + absWindow - 2, Line: "badterm3"}
-	hits = iq.Scan(nv)
-
-	// Should not hit  until the absolute window is up
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
-	}
-
-	// Assert log one nanosecond before the absolute window
-	ev3 := LogEntry{Timestamp: clock + absWindow - 1, Line: "NOOP"}
-	hits = iq.Scan(ev3)
-
-	// Should not hit  until the absolute window is up
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
-	}
-
-	// Now assert log at exactly the absolute window, should fire
-	ev4 := LogEntry{Timestamp: clock + absWindow, Line: "NOOP"}
-	hits = iq.Scan(ev4)
-
-	// Should not hit due to negative term
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-}
-
-func TestSetInversePosRelativeOffset(t *testing.T) {
-	var (
-		clock     = time.Now().UnixNano()
-		window    = int64(time.Millisecond * 500)
-		relWindow = int64(time.Second)
-	)
-
-	iq, err := NewInverseSet(
-		window,
-		[]string{"alpha", "beta"},
-		[]ResetT{
-			{Term: "badterm1"},
-			{Term: "badterm2"},
-			{
-				Term:     "badterm3",
-				Absolute: false,
-				Window:   relWindow,
+		"AnchorRightHit": {
+			// Absolute anchor on right term
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Window:   60,
+					Absolute: true,
+					Anchor:   1, // Anchor on beta
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", stamp: 10},                  // No match due to inclusive right anchor
+				{line: "NOOP", stamp: 69},                         // reset clock + reset window - 1
+				{line: "NOOP", stamp: 70, cb: matchStamps(1, 10)}, // reset clock + reset window
 			},
 		},
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
 
-	// Scan first matcher
-	ev1 := LogEntry{Timestamp: clock, Line: "Match alpha."}
-	hits := iq.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan second matcher, exactly within the window.
-	ev2 := LogEntry{Timestamp: clock + int64(window), Line: "Match beta."}
-	hits = iq.Scan(ev2)
-
-	// Should not hit  until the relative window is up
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
-	}
-
-	// Assert log one nanosecond before the relative window
-	relDeadline := ev2.Timestamp - ev1.Timestamp + relWindow
-	ev3 := LogEntry{Timestamp: clock + relDeadline - 1, Line: "NOOP"}
-	hits = iq.Scan(ev3)
-
-	// Should not hit  until the relative window is up
-	if hits.Cnt != 0 {
-		t.Errorf("Expected cnt 0, got: %v", hits.Cnt)
-	}
-
-	// Now assert log at exactly the relative window, should fire
-	ev4 := LogEntry{Timestamp: clock + relDeadline, Line: "NOOP"}
-	hits = iq.Scan(ev4)
-
-	// Should not hit  until the absolute window is up
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
-		t.Errorf("Fail logs equal")
-	}
-}
-
-//*******
-// -1------4--------------10----------
-// ---2--3----------8---9-----11----
-// ----------5--6-7---------------12-
-// Should fire {1,2,5}, {4,3,6}, {10,8,7}
-
-func TestSetInverseGCOldSecondaryTerms(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 50
-	)
-
-	sm, err := NewInverseSet(window, []string{"alpha", "beta", "gamma"}, nil)
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	clock += 1
-	ev1 := LogEntry{Timestamp: clock, Line: "alpha"}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev2 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev3 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev3)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev4 := LogEntry{Timestamp: clock, Line: "alpha"}
-	hits = sm.Scan(ev4)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev5 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev5)
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2, ev5}) {
-		t.Errorf("Fail log match")
-	}
-
-	clock += 1
-	ev6 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev6)
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev4, ev3, ev6}) {
-		t.Errorf("Fail log match")
-	}
-
-	clock += 1
-	ev7 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev7)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev8 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev8)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev9 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev9)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev10 := LogEntry{Timestamp: clock, Line: "alpha"}
-	hits = sm.Scan(ev10)
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev10, ev8, ev7}) {
-		t.Errorf("Fail log match")
-	}
-
-	clock += 1
-	ev11 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev11)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev12 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev12)
-	testNoFire(t, hits)
-
-	sm.GarbageCollect(clock + window)
-
-	if sm.hotMask.Zeros() {
-		t.Errorf("Expected non empty state")
-	}
-
-	sm.GarbageCollect(clock + window + 1)
-
-	if !sm.hotMask.Zeros() {
-		t.Errorf("Expected  empty state")
-	}
-}
-
-// Reset terms should be dropped if no matches and no reset lookback.
-func TestSetInverseResetsIgnoredOnNoMatch(t *testing.T) {
-
-	var (
-		N           = 11
-		clock int64 = 0
-	)
-
-	// Create a seq matcher with a negative window reset term
-	sm, err := NewInverseSet(10, []string{"alpha", "beta", "gamma"}, []ResetT{
-		{
-			Term: "badterm",
+		"AnchorRightMiss": {
+			// Absolute anchor on right term, fire a reset to prevent match.
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Window:   60,
+					Absolute: true,
+					Anchor:   1, // Anchor on beta
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", stamp: 10}, // No match due to inclusive right anchor
+				{line: "NOOP", stamp: 69},        // reset clock + reset window - 1
+				{line: "reset", stamp: 70},       // reset clock + reset window + slide
+				{line: "NOOP", stamp: 1000},      // reset clock + reset window
+			},
 		},
-	})
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
 
-	// Fire the bad term N times
-	for range N {
-		clock += 1
-		hits := sm.Scan(LogEntry{Timestamp: clock, Line: "badterm"})
-		testNoFire(t, hits)
-	}
-
-	// Should have zero resets
-	if len(sm.resets[0].resets) != 0 {
-		t.Fatalf("Expected 0 negative terms, got %v", len(sm.resets[0].resets))
-	}
-}
-
-// ******
-// -------- A
-// -------- B
-// --234--- R
-
-// Create a set with a negative reset window.
-// Because there is a negative window, reset terms must
-// be kept around, but they should be GC'd after window.
-
-func TestSetInverseResetsAreGCed(t *testing.T) {
-
-	var (
-		N             = 3
-		clock   int64 = 0
-		sWindow int64 = 50
-		rWindow int64 = 20
-		rSlide  int64 = -10
-	)
-
-	// Create a seq matcher with a negative window reset term
-	sm, err := NewInverseSet(sWindow, []string{"alpha", "beta", "gamma"}, []ResetT{
-		{
-			Term:   "badterm",
-			Slide:  rSlide,
-			Window: rWindow,
+		"AnchorRightSlideHit": {
+			// Absolute anchor on right term
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Window:   60,
+					Absolute: true,
+					Anchor:   1, // Anchor on beta
+					Slide:    5, // Slide window to the right
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", stamp: 10},                  // No match due to inclusive right anchor
+				{line: "NOOP", stamp: 74},                         // reset clock + reset window  + slide - 1
+				{line: "NOOP", stamp: 75, cb: matchStamps(1, 10)}, // reset clock + reset window + slide
+			},
 		},
-	})
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
+
+		"AnchorRightSlideMiss": {
+			// Absolute anchor on right term, fire reset to prevent match.
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Window:   60,
+					Absolute: true,
+					Anchor:   1, // Anchor on beta
+					Slide:    5, // Slide window to the right
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", stamp: 10}, // No match due to inclusive right anchor
+				{line: "NOOP", stamp: 74},        // reset clock + reset window  + slide - 1
+				{line: "reset", stamp: 75},       // reset clock + reset window + slide
+				{line: "NOOP", stamp: 1000},      // fire much later, still no match
+			},
+		},
+
+		"AbsoluteRightAnchorLeftSlide": {
+			// ---B--------------
+			// -A----------------
+			// ----C---DE---------
+			// --R---------------
+			// Anchor absolute reset window with neg slide on line 2.
+			// Should disallow {B,A,C} {B,A,D} but {B,A,E} should fire.
+			window: 50,
+			terms:  []string{"alpha", "beta", "gamma"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Window:   5,
+					Absolute: true,
+					Anchor:   2,
+					Slide:    -5,
+				},
+			},
+			steps: []stepT{
+				{line: "Match beta."},
+				{line: "reset"},
+				{line: "Match alpha."},
+				{line: "Match gamma."},           // 'reset' within  window of [-1, 4]
+				{line: "Match gamma.", stamp: 7}, // 'reset' within window of [2, 7]
+				{line: "Match gamma.", stamp: 8, cb: matchStamps(3, 1, 8)}, //'reset' outside window of [3, 8]
+			},
+		},
+
+		"Relative": {
+			//-1-3-------8-- alpha
+			//--2--5-6----9- beta
+			//----4--------- reset1
+			//---------7---- reset2
+			// Two relative resets; should be inclusive on the range.
+			// {1,2} should fire.
+			// {8,9} should fire
+			window: 50,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{Term: "reset1"},
+				{Term: "reset2"},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", cb: matchStamps(1, 2)},
+				{line: "Match alpha part deux."},
+				{line: "This is reset1"},
+				{line: "Match beta."},
+				{line: "Match beta."},
+				{line: "This is reset2"},
+				{line: "Match alpha part trois."},
+				{line: "beta again.", cb: matchStamps(8, 9)},
+			},
+		},
+
+		"AbsoluteWithTwoRelativesHit": {
+			// -1-------- alpha
+			// -----2---- beta
+			// ---------- reset1
+			// ---------- reset2
+			// ---------- reset3
+			// Simple absolute window HIT test.
+			// Should not fire until absolute window ends.
+			// The two relative resets should not impact.
+			window: 50,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{Term: "reset1"},
+				{Term: "reset2"},
+				{
+					Term:     "reset3",
+					Absolute: true,
+					Window:   1000,
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", stamp: 51},
+				{line: "NOOP", stamp: 1000},                         // alpha stamp + reset3 window - 1
+				{line: "NOOP", stamp: 1001, cb: matchStamps(1, 51)}, // alpha stamp + reset3 window
+			},
+		},
+
+		"AbsoluteWithTwoRelativesMiss": {
+			// -1-------- alpha
+			// -----2---- beta
+			// ---------- reset1
+			// ---------- reset2
+			// ---------3 reset3
+			// Simple absolute window HIT test.
+			// Should not fire until absolute window ends.
+			// The two relative resets should not impact.
+			window: 50,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{Term: "reset1"},
+				{Term: "reset2"},
+				{
+					Term:     "reset3",
+					Absolute: true,
+					Window:   1000,
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", stamp: 51},
+				{line: "reset3", stamp: 1001}, // fire reset3 into absolute window
+				{line: "NOOP", stamp: 10000},  // NOOP in the future, no match
+			},
+		},
+
+		"PosRelativeOffsetHit": {
+			// -1-------- alpha
+			// -----2---- beta
+			// ---------- reset1
+			// ---------- reset2
+			// ---------- reset3
+			// Simple absolute window HIT test.
+			// Should not fire until absolute window ends.
+			// The two relative resets should not impact.
+			window: 50,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{Term: "reset1"},
+				{Term: "reset2"},
+				{
+					Term:     "reset3",
+					Absolute: false,
+					Window:   1000,
+				},
+			},
+			steps: []stepT{
+				{line: "Match alpha."},
+				{line: "Match beta.", stamp: 51},
+				{line: "NOOP", stamp: 1050},                         // 1 tick before window expires
+				{line: "NOOP", stamp: 1051, cb: matchStamps(1, 51)}, //  Assert window expires
+			},
+		},
+
+		"GarbageCollectOldTerms": {
+			// -1------4--------------10----------
+			// ---2--3----------8---9-----11----
+			// ----------5--6-7---------------12-
+			// Should fire {1,2,5}, {4,3,6}, {10,8,7}
+			window: 50,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []stepT{
+				{line: "alpha"},
+				{line: "beta"},
+				{line: "beta"},
+				{line: "alpha"},
+				{line: "gamma", cb: matchStamps(1, 2, 5)},
+				{line: "gamma", cb: matchStamps(4, 3, 6)},
+				{line: "gamma"},
+				{line: "beta"},
+				{line: "beta"},
+				{line: "alpha", cb: matchStamps(10, 8, 7)},
+				{line: "beta"},
+				{line: "gamma", postF: garbageCollect(50)}, // window
+				{postF: checkHotMask(0b110)},
+				{postF: garbageCollect(73)},
+				{postF: checkHotMask(0b0)},
+			},
+		},
+
+		"ResetTermsIgnoredOnNoMatch": {
+			// ---------- alpha
+			// ---------- beta
+			// ---------- gamma
+			// -123------ reset
+			// Should not fire any resets.
+			window: 10,
+			terms:  []string{"alpha", "beta", "gamma"},
+			reset: []ResetT{
+				{Term: "reset"},
+			},
+			steps: []stepT{
+				{line: "reset"},
+				{line: "reset"},
+				{line: "reset", postF: checkResets(0, 0)},
+			},
+		},
+
+		"SlideLeftResetsAreGCed": {
+			// -------- alpha
+			// -------- beta
+			// --123--- reset
+			// Create a set with a negative reset window.
+			// Because there is a negative window, reset terms must
+			// be kept around, but they should be GC'd after window.
+			window: 50,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:   "reset",
+					Slide:  -10,
+					Window: 20,
+				},
+			},
+			steps: []stepT{
+				{line: "reset"},
+				{line: "reset"},
+				{line: "reset", postF: checkResets(0, 3)},
+				{line: "NOOP", stamp: 71, postF: checkResets(0, 3)}, // window + reset window + 2 * abs(slide) + first reset
+				{line: "NOOP", postF: checkResets(0, 2)},            // should peel off one reset
+				{line: "NOOP", postF: checkResets(0, 1)},            // should peel off one reset
+				{line: "NOOP", postF: checkResets(0, 0)},            // should peel off one reset
+				{postF: checkGCMark(disableGC)},
+			},
+		},
+
+		"IgnoreOutOfOrder": {
+			// -1------ alpha
+			// 2------- beta
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			steps: []stepT{
+				{line: "alpha", stamp: 2},
+				{line: "beta", stamp: 1},
+			},
+		},
 	}
 
-	// Fire the bad term N times
-	for range N {
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			sm, err := NewInverseSet(tc.window, tc.terms, tc.reset)
+			if err != nil {
+				t.Fatalf("Expected err == nil, got %v", err)
+			}
 
-		hits := sm.Scan(LogEntry{Timestamp: clock, Line: "badterm"})
-		testNoFire(t, hits)
-		clock += 1
-	}
+			clock := tc.clock
 
-	// Negative terms with nothing hot w/o lookback have been optimized out.
-	if len(sm.resets[0].resets) != 3 {
-		t.Fatalf("Expected 3 negative terms, got %v", len(sm.resets[0].resets))
-	}
+			for idx, step := range tc.steps {
 
-	// Emit noop at full GC window (see calcGCWindow)
-	gcWindow := sWindow + rWindow + rSlide
-	if rSlide < 0 {
-		gcWindow += -rSlide
-	}
-	hits := sm.Scan(entry.LogEntry{Timestamp: gcWindow, Line: "NOOP"})
-	testNoFire(t, hits)
+				clock += 1
+				stamp := clock
+				if step.stamp != 0 {
+					stamp = step.stamp
+					clock = stamp
+				}
 
-	// We should have some negative terms
-	if len(sm.resets[0].resets) != 3 {
-		t.Fatalf("Expected 3 negative terms, got %v", len(sm.resets[0].resets))
-	}
+				if step.line != "" {
+					var (
+						entry = entry.LogEntry{Timestamp: stamp, Line: step.line}
+						hits  = sm.Scan(entry)
+					)
 
-	// Emit noop right after window
-	hits = sm.Scan(entry.LogEntry{Timestamp: gcWindow + 1, Line: "NOOP"})
-	testNoFire(t, hits)
+					if step.cb == nil {
+						checkNoFire(t, idx+1, hits)
+					} else {
+						step.cb(t, idx+1, hits)
+					}
+				}
 
-	// Should have peeled off one term
-	if len(sm.resets[0].resets) != 2 {
-		t.Fatalf("Expected 2 negative terms, got %v", len(sm.resets[0].resets))
-	}
-
-	// Emit noop right after window +2
-	hits = sm.Scan(entry.LogEntry{Timestamp: gcWindow + 2, Line: "NOOP"})
-	testNoFire(t, hits)
-
-	// Should have peeled off one term
-	if len(sm.resets[0].resets) != 1 {
-		t.Fatalf("Expected 1 negative terms, got %v", len(sm.resets[0].resets))
-	}
-
-	// Emit noop right after window +3
-	hits = sm.Scan(entry.LogEntry{Timestamp: gcWindow + 3, Line: "NOOP"})
-	testNoFire(t, hits)
-
-	// Should have peeled off the last term
-	if len(sm.resets[0].resets) != 0 {
-		t.Fatalf("Expected 0 negative terms, got %v", len(sm.resets[0].resets))
-	}
-
-	// GC should be disabled
-	if sm.gcMark != disableGC {
-		t.Errorf("Expected GC to be disabled, got :%v", sm.gcMark)
+				if step.postF != nil {
+					step.postF(t, idx+1, sm)
+				}
+			}
+		})
 	}
 }
 
-// Ignore events fired out of order
-func TestSetInverseTimestampOutofOrder(t *testing.T) {
-	var (
-		clock  int64 = 1
-		window int64 = 10
-	)
+type stepT struct {
+	stamp int64
+	line  string
+	cb    func(*testing.T, int, Hits)
+	postF func(*testing.T, int, *InverseSet)
+}
 
-	sm, err := NewInverseSet(window, []string{"alpha", "gamma"}, nil)
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
+func matchStamps(stamps ...int64) func(*testing.T, int, Hits) {
+	return matchStampsN(1, stamps...)
+}
+
+func matchStampsN(cnt int, stamps ...int64) func(*testing.T, int, Hits) {
+	return func(t *testing.T, step int, hits Hits) {
+		t.Helper()
+		if cnt != hits.Cnt {
+			t.Errorf("Step %v: Expected %v hits, got %v", step, cnt, hits.Cnt)
+			return
+		}
+
+		for i, stamp := range stamps {
+			if hits.Logs[i].Timestamp != stamp {
+				t.Errorf("Step %v: Expected %v, got %v on index %v", step, stamp, hits.Logs[i].Timestamp, i)
+			}
+		}
 	}
+}
 
-	// Set up partial match, should not fire
-	ev1 := LogEntry{Timestamp: clock, Line: "alpha"}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
+func checkHotMask(mask int64) func(*testing.T, int, *InverseSet) {
+	return func(t *testing.T, step int, sm *InverseSet) {
+		t.Helper()
+		if sm.hotMask != bitMaskT(mask) {
+			t.Errorf("Step %v: Expected hotMask == %b, got %b", step, mask, sm.hotMask)
+		}
+	}
+}
 
-	// Fire second matcher at same time; should fire
-	// since we are not enforcing strict ordering.
-	ev2 := LogEntry{Timestamp: clock - 1, Line: "gamma"}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
+func checkEval(clock int64, cb func(*testing.T, int, Hits)) func(*testing.T, int, *InverseSet) {
+	return func(t *testing.T, step int, sm *InverseSet) {
+		t.Helper()
+		hits := sm.Eval(clock)
+		cb(t, step, hits)
+	}
+}
+
+func checkNoFire(t *testing.T, step int, hits Hits) {
+	t.Helper()
+	if hits.Cnt != 0 {
+		t.Errorf("Step %v: Expected 0 hits, got %v", step, hits.Cnt)
+	}
+}
+
+func checkResets(idx int, cnt int) func(*testing.T, int, *InverseSet) {
+	return func(t *testing.T, step int, sm *InverseSet) {
+		t.Helper()
+		if len(sm.resets[idx].resets) != cnt {
+			t.Errorf(
+				"Step %v: Expected %v resets on idx: %v, got %v",
+				step,
+				cnt,
+				idx,
+				len(sm.resets[idx].resets),
+			)
+		}
+	}
+}
+
+func garbageCollect(clock int64) func(*testing.T, int, *InverseSet) {
+	return func(t *testing.T, step int, sm *InverseSet) {
+		t.Helper()
+		sm.GarbageCollect(clock)
+	}
+}
+
+func checkGCMark(mark int64) func(*testing.T, int, *InverseSet) {
+	return func(t *testing.T, step int, sm *InverseSet) {
+		t.Helper()
+		if sm.gcMark != mark {
+			t.Errorf("Step %v: Expected gcMark == %v, got %v", step, mark, sm.gcMark)
+		}
+	}
 }
 
 // --------------------
