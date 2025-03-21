@@ -29,7 +29,42 @@ func matchStampsN(cnt int, stamps ...int64) func(*testing.T, int, Hits) {
 	}
 }
 
-// Define a type constraint that only allows string or int64
+func matchLines(lines ...string) func(*testing.T, int, Hits) {
+	return matchLinesN(1, lines...)
+}
+
+func matchLinesN(cnt int, lines ...string) func(*testing.T, int, Hits) {
+	return func(t *testing.T, step int, hits Hits) {
+		t.Helper()
+		if cnt != hits.Cnt {
+			t.Errorf("Step %v: Expected %v hits, got %v", step, cnt, hits.Cnt)
+			return
+		}
+
+		for i, line := range lines {
+			if hits.Logs[i].Line != line {
+				t.Errorf("Step %v: Expected %v, got %v on index %v", step, line, hits.Logs[i].Line, i)
+			}
+		}
+	}
+}
+
+func checkActive[T any](nActive int) func(*testing.T, int, *T) {
+	return func(t *testing.T, step int, sm *T) {
+		t.Helper()
+		var active int
+		switch v := any(sm).(type) {
+		case *MatchSeq:
+			active = v.nActive
+		default:
+			panic("Invalid type")
+		}
+
+		if active != nActive {
+			t.Errorf("Step %v: Expected nActive == %v, got %v", step, active, nActive)
+		}
+	}
+}
 
 func checkHotMask[T any](mask int64) func(*testing.T, int, *T) {
 	return func(t *testing.T, step int, sm *T) {

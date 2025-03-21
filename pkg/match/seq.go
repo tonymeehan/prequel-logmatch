@@ -15,7 +15,7 @@ import (
 // Note: The matcher does not currently enforce strict ordering on match.  This means
 // that if two matches in a sequence have the same timestamp, it will be considered a match.
 // This is done to account for imprecise clocks; a clock with low resolution might emit
-// two events with the same timestamp when in fact they are not.
+// two events with the same timestamp when in real time they are sequential.
 
 type MatchSeq struct {
 	clock   int64
