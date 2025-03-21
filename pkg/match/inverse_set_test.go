@@ -36,10 +36,45 @@ func TestSetInverse(t *testing.T) {
 		steps  []stepT
 	}{
 		"SingleTerm": {
+			// -A---------------- alpha
 			window: 10,
 			terms:  []string{"alpha"},
 			steps: []stepT{
 				{line: "alpha", cb: matchStamps(1)},
+			},
+		},
+
+		"SingleTermResetHit": {
+			// -A---------------- alpha
+			// ------------------ reset
+			terms: []string{"alpha"},
+			reset: []ResetT{
+				{
+					Window: 10,
+					Term:   "reset",
+				},
+			},
+			steps: []stepT{
+				{line: "alpha"},
+				{line: "NOOP", stamp: 10},                      // fire slightly early
+				{line: "reset", stamp: 12, cb: matchStamps(1)}, // Fire reset late
+			},
+		},
+
+		"SingleTermResetMiss": {
+			// -A---------------- alpha
+			// -----------B------ reset
+			terms: []string{"alpha"},
+			reset: []ResetT{
+				{
+					Window: 10,
+					Term:   "reset",
+				},
+			},
+			steps: []stepT{
+				{line: "alpha"},
+				{line: "reset", stamp: 11},
+				{line: "NOOP", stamp: 1000},
 			},
 		},
 
