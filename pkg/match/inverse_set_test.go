@@ -1,7 +1,6 @@
 package match
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -28,19 +27,20 @@ func TestSetInverseBadAnchor(t *testing.T) {
 }
 
 func TestSetInverse(t *testing.T) {
+	type step = stepT[InverseSet]
 
 	var tests = map[string]struct {
 		clock  int64
 		window int64
 		terms  []string
 		reset  []ResetT
-		steps  []stepT
+		steps  []step
 	}{
 		"SingleTerm": {
 			// -A---------------- alpha
 			window: 10,
 			terms:  []string{"alpha"},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha", cb: matchStamps(1)},
 			},
 		},
@@ -55,7 +55,7 @@ func TestSetInverse(t *testing.T) {
 					Term:   "reset",
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha"},
 				{line: "NOOP", stamp: 10},                      // fire slightly early
 				{line: "reset", stamp: 12, cb: matchStamps(1)}, // Fire reset late
@@ -72,7 +72,7 @@ func TestSetInverse(t *testing.T) {
 					Term:   "reset",
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha"},
 				{line: "reset", stamp: 11},
 				{line: "NOOP", stamp: 1000},
@@ -88,7 +88,7 @@ func TestSetInverse(t *testing.T) {
 			reset: []ResetT{{
 				Term: "reset",
 			}}, // Simple relative reset
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha", stamp: 1},
 				{line: "reset", stamp: 1},
 			},
@@ -101,15 +101,15 @@ func TestSetInverse(t *testing.T) {
 			// Should see {A,C,B} {E,G,D}
 			window: 50,
 			terms:  []string{"alpha", "beta", "gamma"},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha"},
 				{line: "gamma"},
 				{line: "beta", cb: matchStamps(1, 3, 2)},
 				{line: "gamma"},
 				{line: "alpha"},
 				{line: "gamma"},
-				{line: "beta", cb: matchStamps(5, 7, 4), postF: checkHotMask(0b100)},
-				{line: "beta", postF: checkHotMask(0b110)},
+				{line: "beta", cb: matchStamps(5, 7, 4), postF: checkHotMask[InverseSet](0b100)},
+				{line: "beta", postF: checkHotMask[InverseSet](0b110)},
 			},
 		},
 
@@ -120,12 +120,12 @@ func TestSetInverse(t *testing.T) {
 			// With window of 5. should see {D,C,B}
 			window: 5,
 			terms:  []string{"alpha", "beta", "gamma"},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha"},
 				{line: "gamma", stamp: 4},
 				{line: "beta", stamp: 7},
 				{line: "alpha", stamp: 8, cb: matchStamps(8, 7, 4)},
-				{line: "gamma", stamp: 9, postF: checkHotMask(0b100)},
+				{line: "gamma", stamp: 9, postF: checkHotMask[InverseSet](0b100)},
 			},
 		},
 
@@ -136,7 +136,7 @@ func TestSetInverse(t *testing.T) {
 			// Dupe timestamps are tolerated.
 			window: 5,
 			terms:  []string{"alpha", "beta", "gamma"},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha", stamp: 1},
 				{line: "gamma", stamp: 1},
 				{line: "beta", stamp: 1, cb: matchStamps(1, 1, 1)},
@@ -153,7 +153,7 @@ func TestSetInverse(t *testing.T) {
 			reset: []ResetT{{
 				Term: "reset",
 			}}, // Simple relative reset
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha", stamp: 1},
 				{line: "beta", stamp: 2},
 				{line: "reset", stamp: 2},
@@ -175,7 +175,7 @@ func TestSetInverse(t *testing.T) {
 					Absolute: true,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha"},
 				{line: "beta", postF: checkEval(21, checkNoFire)}, // clock + rWindow == 21 within reset window
 				{postF: checkEval(22, matchStamps(1, 2))},         // clock + rWindow + 1== 22, outside reset window
@@ -199,7 +199,7 @@ func TestSetInverse(t *testing.T) {
 					Absolute: true,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "reset"},
 				{line: "Match alpha.", stamp: 6},                        // clock + reset window, inside reset winow
 				{line: "Match beta.", stamp: 7},                         // clock + reset window + 1, outside reset window
@@ -223,7 +223,7 @@ func TestSetInverse(t *testing.T) {
 					Absolute: true,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta."},                              // Should not fire due to future reset
 				{line: "reset", stamp: 36},                         // reset window + slide + 1
@@ -248,7 +248,7 @@ func TestSetInverse(t *testing.T) {
 					Window: 10,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta."},
 				{line: "Match gamma", postF: checkEval(2, checkNoFire)},
@@ -268,7 +268,7 @@ func TestSetInverse(t *testing.T) {
 					Anchor:   1, // Anchor on beta
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 10},                  // No match due to inclusive right anchor
 				{line: "NOOP", stamp: 70},                         // reset clock + reset window
@@ -288,7 +288,7 @@ func TestSetInverse(t *testing.T) {
 					Anchor:   1, // Anchor on beta
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 10}, // No match due to inclusive right anchor
 				{line: "NOOP", stamp: 69},        // reset clock + reset window - 1
@@ -310,7 +310,7 @@ func TestSetInverse(t *testing.T) {
 					Slide:    5, // Slide window to the right
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 10},                  // No match due to inclusive right anchor
 				{line: "NOOP", stamp: 75},                         // reset clock + reset window + slide
@@ -331,7 +331,7 @@ func TestSetInverse(t *testing.T) {
 					Slide:    5, // Slide window to the right
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 10}, // No match due to inclusive right anchor
 				{line: "NOOP", stamp: 74},        // reset clock + reset window  + slide - 1
@@ -358,7 +358,7 @@ func TestSetInverse(t *testing.T) {
 					Slide:    -5,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match beta."},
 				{line: "reset"},
 				{line: "Match alpha."},
@@ -382,7 +382,7 @@ func TestSetInverse(t *testing.T) {
 				{Term: "reset1"},
 				{Term: "reset2"},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta."}, // Delay fire {1,2} until prove no dupes by assert stamp=3
 				{line: "Match alpha part deux.", cb: matchStamps(1, 2)},
@@ -416,7 +416,7 @@ func TestSetInverse(t *testing.T) {
 					Window:   1000,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 51},
 				{line: "NOOP", stamp: 1001},                         // alpha stamp + reset3 window
@@ -444,7 +444,7 @@ func TestSetInverse(t *testing.T) {
 					Window:   1000,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 51},
 				{line: "reset3", stamp: 1001}, // fire reset3 into absolute window
@@ -471,7 +471,7 @@ func TestSetInverse(t *testing.T) {
 					Window:   30,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 11},
 				{line: "NOOP", stamp: 41},                         // reset3 window + relative window + 1 to include 'beta'
@@ -486,7 +486,7 @@ func TestSetInverse(t *testing.T) {
 			// Should fire {1,2,5}, {4,3,6}, {10,8,7}
 			window: 50,
 			terms:  []string{"alpha", "beta", "gamma"},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha"},
 				{line: "beta"},
 				{line: "beta"},
@@ -498,10 +498,10 @@ func TestSetInverse(t *testing.T) {
 				{line: "beta"},
 				{line: "alpha", cb: matchStamps(10, 8, 7)},
 				{line: "beta"},
-				{line: "gamma", postF: garbageCollect(50)}, // window
-				{postF: checkHotMask(0b110)},
-				{postF: garbageCollect(73)},
-				{postF: checkHotMask(0b0)},
+				{line: "gamma", postF: garbageCollect[*InverseSet](50)}, // window
+				{postF: checkHotMask[InverseSet](0b110)},
+				{postF: garbageCollect[*InverseSet](73)},
+				{postF: checkHotMask[InverseSet](0b0)},
 			},
 		},
 
@@ -516,7 +516,7 @@ func TestSetInverse(t *testing.T) {
 			reset: []ResetT{
 				{Term: "reset"},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "reset"},
 				{line: "reset"},
 				{line: "reset", postF: checkResets(0, 0)},
@@ -539,7 +539,7 @@ func TestSetInverse(t *testing.T) {
 					Window: 20,
 				},
 			},
-			steps: []stepT{
+			steps: []step{
 				{line: "reset"},
 				{line: "reset"},
 				{line: "reset", postF: checkResets(0, 3)},
@@ -556,7 +556,7 @@ func TestSetInverse(t *testing.T) {
 			// 2------- beta
 			window: 10,
 			terms:  []string{"alpha", "beta"},
-			steps: []stepT{
+			steps: []step{
 				{line: "alpha", stamp: 2},
 				{line: "beta", stamp: 1},
 			},
@@ -568,10 +568,6 @@ func TestSetInverse(t *testing.T) {
 			sm, err := NewInverseSet(tc.window, tc.terms, tc.reset)
 			if err != nil {
 				t.Fatalf("Expected err == nil, got %v", err)
-			}
-
-			if name == "PosRelativeOffsetHit" {
-				fmt.Println("break")
 			}
 
 			clock := tc.clock
@@ -603,88 +599,6 @@ func TestSetInverse(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-type stepT struct {
-	stamp int64
-	line  string
-	cb    func(*testing.T, int, Hits)
-	postF func(*testing.T, int, *InverseSet)
-}
-
-func matchStamps(stamps ...int64) func(*testing.T, int, Hits) {
-	return matchStampsN(1, stamps...)
-}
-
-func matchStampsN(cnt int, stamps ...int64) func(*testing.T, int, Hits) {
-	return func(t *testing.T, step int, hits Hits) {
-		t.Helper()
-		if cnt != hits.Cnt {
-			t.Errorf("Step %v: Expected %v hits, got %v", step, cnt, hits.Cnt)
-			return
-		}
-
-		for i, stamp := range stamps {
-			if hits.Logs[i].Timestamp != stamp {
-				t.Errorf("Step %v: Expected %v, got %v on index %v", step, stamp, hits.Logs[i].Timestamp, i)
-			}
-		}
-	}
-}
-
-func checkHotMask(mask int64) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
-		t.Helper()
-		if sm.hotMask != bitMaskT(mask) {
-			t.Errorf("Step %v: Expected hotMask == %b, got %b", step, mask, sm.hotMask)
-		}
-	}
-}
-
-func checkEval(clock int64, cb func(*testing.T, int, Hits)) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
-		t.Helper()
-		hits := sm.Eval(clock)
-		cb(t, step, hits)
-	}
-}
-
-func checkNoFire(t *testing.T, step int, hits Hits) {
-	t.Helper()
-	if hits.Cnt != 0 {
-		t.Errorf("Step %v: Expected 0 hits, got %v", step, hits.Cnt)
-	}
-}
-
-func checkResets(idx int, cnt int) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
-		t.Helper()
-		if len(sm.resets[idx].resets) != cnt {
-			t.Errorf(
-				"Step %v: Expected %v resets on idx: %v, got %v",
-				step,
-				cnt,
-				idx,
-				len(sm.resets[idx].resets),
-			)
-		}
-	}
-}
-
-func garbageCollect(clock int64) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
-		t.Helper()
-		sm.GarbageCollect(clock)
-	}
-}
-
-func checkGCMark(mark int64) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
-		t.Helper()
-		if sm.gcMark != mark {
-			t.Errorf("Step %v: Expected gcMark == %v, got %v", step, mark, sm.gcMark)
-		}
 	}
 }
 

@@ -80,7 +80,7 @@ func (r *InverseSet) Scan(e entry.LogEntry) (hits Hits) {
 			Str("line", e.Line).
 			Int64("stamp", e.Timestamp).
 			Int64("clock", r.clock).
-			Msg("MatchSeq: Out of order event.")
+			Msg("InverseSet: Out of order event.")
 		return
 	}
 	r.clock = e.Timestamp

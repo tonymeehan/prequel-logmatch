@@ -17,7 +17,9 @@ import (
 var ErrEmptyTerm = errors.New("empty term")
 
 type Matcher interface {
+	Eval(int64) Hits
 	Scan(e entry.LogEntry) Hits
+	GarbageCollect(int64)
 }
 
 type LogEntry = entry.LogEntry
