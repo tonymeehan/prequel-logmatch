@@ -1,6 +1,7 @@
 package match
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -78,6 +79,21 @@ func TestSetInverse(t *testing.T) {
 			},
 		},
 
+		"SingleTermDupeTimestampReset": {
+			//	-1---------------- alpha
+			//	-2---------------- reset
+			// An event with a dupe timestamp at the end of the reset window should not fire.
+			window: 10,
+			terms:  []string{"alpha"},
+			reset: []ResetT{{
+				Term: "reset",
+			}}, // Simple relative reset
+			steps: []stepT{
+				{line: "alpha", stamp: 1},
+				{line: "reset", stamp: 1},
+			},
+		},
+
 		"SimpleNoReset": {
 			// A--------E-------
 			// -----C-------G-H--
@@ -127,6 +143,23 @@ func TestSetInverse(t *testing.T) {
 			},
 		},
 
+		"DupeTimestampOnEndOfResetWindow": {
+			//	-1---------------- alpha
+			//	--2---------------- beta
+			//	--3---------------- reset
+			// An even with a dupe timestamp at the end of the reset window should not fire.
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{{
+				Term: "reset",
+			}}, // Simple relative reset
+			steps: []stepT{
+				{line: "alpha", stamp: 1},
+				{line: "beta", stamp: 2},
+				{line: "reset", stamp: 2},
+			},
+		},
+
 		"ManualEval": {
 			// -A-------------------
 			// --B------------------
@@ -144,8 +177,8 @@ func TestSetInverse(t *testing.T) {
 			},
 			steps: []stepT{
 				{line: "alpha"},
-				{line: "beta", postF: checkEval(20, checkNoFire)}, // clock + rWindow == 20, within reset window
-				{postF: checkEval(21, matchStamps(1, 2))},         // clock + rWindow + 1== 21, outside reset window
+				{line: "beta", postF: checkEval(21, checkNoFire)}, // clock + rWindow == 21 within reset window
+				{postF: checkEval(22, matchStamps(1, 2))},         // clock + rWindow + 1== 22, outside reset window
 			},
 		},
 
@@ -176,10 +209,10 @@ func TestSetInverse(t *testing.T) {
 		},
 
 		"SlideRight": {
-			// -A---------C----
-			// --B-------D-----
-			// -----R----------
-			// Should fail {A,B} on R, but fire {D,C} after absolute timeout.
+			// -1---------5----
+			// --2-------4-----
+			// -----3----------
+			// Should fail {1,2} on 3 but fire {5,4} after absolute timeout.
 			window: 10,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
@@ -193,11 +226,11 @@ func TestSetInverse(t *testing.T) {
 			steps: []stepT{
 				{line: "Match alpha."},
 				{line: "Match beta."},                              // Should not fire due to future reset
-				{line: "reset", stamp: 35},                         // reset window + slide -1
+				{line: "reset", stamp: 36},                         // reset window + slide + 1
 				{line: "Match beta.", stamp: 36},                   // First term out of reset window
 				{line: "Match alpha.", stamp: 37},                  // reset window + slide, should not fire
-				{line: "NOOP", stamp: 70},                          // 2 * (reset window + slide)
-				{line: "NOOP", stamp: 71, cb: matchStamps(37, 36)}, // 2 * (reset window + slide) + 1, window expires
+				{line: "NOOP", stamp: 71},                          // beta stamp + slide + window
+				{line: "NOOP", stamp: 72, cb: matchStamps(37, 36)}, // beta stamp + slide + window+ 1, window expires
 			},
 		},
 
@@ -238,8 +271,8 @@ func TestSetInverse(t *testing.T) {
 			steps: []stepT{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 10},                  // No match due to inclusive right anchor
-				{line: "NOOP", stamp: 69},                         // reset clock + reset window - 1
-				{line: "NOOP", stamp: 70, cb: matchStamps(1, 10)}, // reset clock + reset window
+				{line: "NOOP", stamp: 70},                         // reset clock + reset window
+				{line: "NOOP", stamp: 71, cb: matchStamps(1, 10)}, // reset clock + reset window
 			},
 		},
 
@@ -280,8 +313,8 @@ func TestSetInverse(t *testing.T) {
 			steps: []stepT{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 10},                  // No match due to inclusive right anchor
-				{line: "NOOP", stamp: 74},                         // reset clock + reset window  + slide - 1
-				{line: "NOOP", stamp: 75, cb: matchStamps(1, 10)}, // reset clock + reset window + slide
+				{line: "NOOP", stamp: 75},                         // reset clock + reset window + slide
+				{line: "NOOP", stamp: 76, cb: matchStamps(1, 10)}, // reset clock + reset window + slide + 1
 			},
 		},
 
@@ -310,7 +343,7 @@ func TestSetInverse(t *testing.T) {
 		"AbsoluteRightAnchorLeftSlide": {
 			// ---B--------------
 			// -A----------------
-			// ----C---DE---------
+			// ----C---D--E-------
 			// --R---------------
 			// Anchor absolute reset window with neg slide on line 2.
 			// Should disallow {B,A,C} {B,A,D} but {B,A,E} should fire.
@@ -329,9 +362,9 @@ func TestSetInverse(t *testing.T) {
 				{line: "Match beta."},
 				{line: "reset"},
 				{line: "Match alpha."},
-				{line: "Match gamma."},           // 'reset' within  window of [-1, 4]
-				{line: "Match gamma.", stamp: 7}, // 'reset' within window of [2, 7]
-				{line: "Match gamma.", stamp: 8, cb: matchStamps(3, 1, 8)}, //'reset' outside window of [3, 8]
+				{line: "Match gamma."},           // 'reset(2)' within  window of [-1, 5]
+				{line: "Match gamma.", stamp: 8}, // 'reset(2)' outside window of [3,8], but won't fire until reset window expires
+				{line: "Match gamma.", stamp: 11, cb: matchStamps(3, 1, 8)},
 			},
 		},
 
@@ -351,14 +384,15 @@ func TestSetInverse(t *testing.T) {
 			},
 			steps: []stepT{
 				{line: "Match alpha."},
-				{line: "Match beta.", cb: matchStamps(1, 2)},
-				{line: "Match alpha part deux."},
+				{line: "Match beta."}, // Delay fire {1,2} until prove no dupes by assert stamp=3
+				{line: "Match alpha part deux.", cb: matchStamps(1, 2)},
 				{line: "This is reset1"},
 				{line: "Match beta."},
 				{line: "Match beta."},
 				{line: "This is reset2"},
 				{line: "Match alpha part trois."},
-				{line: "beta again.", cb: matchStamps(8, 9)},
+				{line: "beta again."}, // no match yet until out of reset2 window completely, which happens on next line
+				{line: "NOOP", cb: matchStamps(8, 9)},
 			},
 		},
 
@@ -385,8 +419,8 @@ func TestSetInverse(t *testing.T) {
 			steps: []stepT{
 				{line: "Match alpha."},
 				{line: "Match beta.", stamp: 51},
-				{line: "NOOP", stamp: 1000},                         // alpha stamp + reset3 window - 1
-				{line: "NOOP", stamp: 1001, cb: matchStamps(1, 51)}, // alpha stamp + reset3 window
+				{line: "NOOP", stamp: 1001},                         // alpha stamp + reset3 window
+				{line: "NOOP", stamp: 1002, cb: matchStamps(1, 51)}, // alpha stamp + reset3 window + 1
 			},
 		},
 
@@ -424,10 +458,9 @@ func TestSetInverse(t *testing.T) {
 			// ---------- reset1
 			// ---------- reset2
 			// ---------- reset3
-			// Simple absolute window HIT test.
-			// Should not fire until absolute window ends.
-			// The two relative resets should not impact.
-			window: 50,
+			// Simple relative window HIT test.
+			// Should not fire until relative window(s) end.
+			window: 10,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{Term: "reset1"},
@@ -435,14 +468,14 @@ func TestSetInverse(t *testing.T) {
 				{
 					Term:     "reset3",
 					Absolute: false,
-					Window:   1000,
+					Window:   30,
 				},
 			},
 			steps: []stepT{
 				{line: "Match alpha."},
-				{line: "Match beta.", stamp: 51},
-				{line: "NOOP", stamp: 1050},                         // 1 tick before window expires
-				{line: "NOOP", stamp: 1051, cb: matchStamps(1, 51)}, //  Assert window expires
+				{line: "Match beta.", stamp: 11},
+				{line: "NOOP", stamp: 41},                         // reset3 window + relative window + 1 to include 'beta'
+				{line: "NOOP", stamp: 42, cb: matchStamps(1, 11)}, //  Assert window expires
 			},
 		},
 
@@ -510,7 +543,7 @@ func TestSetInverse(t *testing.T) {
 				{line: "reset"},
 				{line: "reset"},
 				{line: "reset", postF: checkResets(0, 3)},
-				{line: "NOOP", stamp: 71, postF: checkResets(0, 3)}, // window + reset window + 2 * abs(slide) + first reset
+				{line: "NOOP", stamp: 72, postF: checkResets(0, 3)}, // window + reset window + 2 * abs(slide) + first reset + 1 for overlap
 				{line: "NOOP", postF: checkResets(0, 2)},            // should peel off one reset
 				{line: "NOOP", postF: checkResets(0, 1)},            // should peel off one reset
 				{line: "NOOP", postF: checkResets(0, 0)},            // should peel off one reset
@@ -535,6 +568,10 @@ func TestSetInverse(t *testing.T) {
 			sm, err := NewInverseSet(tc.window, tc.terms, tc.reset)
 			if err != nil {
 				t.Fatalf("Expected err == nil, got %v", err)
+			}
+
+			if name == "PosRelativeOffsetHit" {
+				fmt.Println("break")
 			}
 
 			clock := tc.clock

@@ -202,8 +202,10 @@ func (r *InverseSet) checkReset(clock int64) (int64, uint8) {
 		}
 
 		// If the reset window is in the future, we cannot come to a conclusion.
-		if stop > clock {
-			return stop - clock, math.MaxUint8
+		// We must wait until the reset window is in the past due to events with
+		// duplicate timestamps.  Thus must wait until one tick past the reset window.
+		if stop >= clock {
+			return stop - clock + 1, math.MaxUint8
 		}
 	}
 
