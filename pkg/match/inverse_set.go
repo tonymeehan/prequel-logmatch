@@ -247,18 +247,19 @@ func (r *InverseSet) maybeGC(clock int64) {
 // Remove all terms that are older than the window.
 func (r *InverseSet) GarbageCollect(clock int64) {
 
+	// Special case;
+	// If all the terms are hot and we have resets,
+	// allow the GC to be handled on the next evaluation.
+	// Otherwise, we may GC an valid single term prematurely.
+	if len(r.resets) > 0 && r.hotMask.FirstN(len(r.terms)) {
+		r.gcMark = disableGC
+		return
+	}
+
 	var (
 		nMark    = disableGC
 		deadline = clock - r.gcRight
 	)
-
-	// Special case;
-	// If we have only one term with resets,
-	// allow the GC to be handled on the next evaluation.
-	// Otherwise, we may GC an valid single term prematurely.
-	if len(r.terms) == 1 && len(r.resets) > 0 {
-		return
-	}
 
 	for i, term := range r.terms {
 

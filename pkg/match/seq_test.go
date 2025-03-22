@@ -133,7 +133,7 @@ func TestSeq(t *testing.T) {
 			},
 		},
 
-		"MatchDupes": {
+		"DupeTimestamps": {
 			// -1--------- alpha
 			// -2--------- beta
 			// -3--------- gamma

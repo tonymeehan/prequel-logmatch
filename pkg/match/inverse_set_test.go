@@ -561,6 +561,26 @@ func TestSetInverse(t *testing.T) {
 				{line: "beta", stamp: 1},
 			},
 		},
+
+		"SimpleWindowMatchHitWithAbsoluteResetAndBigJump": {
+			// --A----------
+			// ----------B--
+			// Fire B outside of window, should delay until past window.
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			reset: []ResetT{
+				{
+					Term:     "reset",
+					Window:   50,
+					Absolute: true,
+				},
+			},
+			steps: []step{
+				{line: "alpha"},
+				{line: "beta"},
+				{line: "NOOP", stamp: 10000, cb: matchStamps(1, 2)}, // way out of reset window
+			},
+		},
 	}
 
 	for name, tc := range tests {
