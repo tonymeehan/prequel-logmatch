@@ -56,6 +56,8 @@ func checkActive[T any](nActive int) func(*testing.T, int, *T) {
 		switch v := any(sm).(type) {
 		case *MatchSeq:
 			active = v.nActive
+		case *InverseSeq:
+			active = v.nActive
 		default:
 			panic("Invalid type")
 		}
@@ -85,14 +87,6 @@ func checkHotMask[T any](mask int64) func(*testing.T, int, *T) {
 	}
 }
 
-func checkEval(clock int64, cb func(*testing.T, int, Hits)) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
-		t.Helper()
-		hits := sm.Eval(clock)
-		cb(t, step, hits)
-	}
-}
-
 func checkNoFire(t *testing.T, step int, hits Hits) {
 	t.Helper()
 	if hits.Cnt != 0 {
@@ -100,18 +94,55 @@ func checkNoFire(t *testing.T, step int, hits Hits) {
 	}
 }
 
-func checkResets(idx int, cnt int) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
+func checkResets[T any](idx int, cnt int) func(*testing.T, int, *T) {
+	return func(t *testing.T, step int, sm *T) {
 		t.Helper()
-		if len(sm.resets[idx].resets) != cnt {
+		var resetCnt int
+		switch v := any(sm).(type) {
+		case *InverseSet:
+			resetCnt = len(v.resets[idx].resets)
+		case *InverseSeq:
+			resetCnt = len(v.resets[idx].resets)
+		default:
+			panic("Invalid type")
+		}
+
+		if resetCnt != cnt {
 			t.Errorf(
 				"Step %v: Expected %v resets on idx: %v, got %v",
 				step,
 				cnt,
 				idx,
-				len(sm.resets[idx].resets),
+				resetCnt,
 			)
 		}
+	}
+}
+
+func checkGCMark[T any](mark int64) func(*testing.T, int, *T) {
+	return func(t *testing.T, step int, sm *T) {
+		t.Helper()
+		var gcMark int64
+		switch v := any(sm).(type) {
+		case *InverseSet:
+			gcMark = v.gcMark
+		case *InverseSeq:
+			gcMark = v.gcMark
+		default:
+			panic("Invalid type")
+		}
+
+		if gcMark != mark {
+			t.Errorf("Step %v: Expected gcMark == %v, got %v", step, mark, gcMark)
+		}
+	}
+}
+
+func checkEval[T Matcher](clock int64, cb func(*testing.T, int, Hits)) func(*testing.T, int, T) {
+	return func(t *testing.T, step int, sm T) {
+		t.Helper()
+		hits := sm.Eval(clock)
+		cb(t, step, hits)
 	}
 }
 
@@ -119,14 +150,5 @@ func garbageCollect[T Matcher](clock int64) func(*testing.T, int, T) {
 	return func(t *testing.T, step int, sm T) {
 		t.Helper()
 		sm.GarbageCollect(clock)
-	}
-}
-
-func checkGCMark(mark int64) func(*testing.T, int, *InverseSet) {
-	return func(t *testing.T, step int, sm *InverseSet) {
-		t.Helper()
-		if sm.gcMark != mark {
-			t.Errorf("Step %v: Expected gcMark == %v, got %v", step, mark, sm.gcMark)
-		}
 	}
 }

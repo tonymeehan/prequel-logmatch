@@ -177,8 +177,8 @@ func TestSetInverse(t *testing.T) {
 			},
 			steps: []step{
 				{line: "alpha"},
-				{line: "beta", postF: checkEval(21, checkNoFire)}, // clock + rWindow == 21 within reset window
-				{postF: checkEval(22, matchStamps(1, 2))},         // clock + rWindow + 1== 22, outside reset window
+				{line: "beta", postF: checkEval[*InverseSet](21, checkNoFire)}, // clock + rWindow == 21 within reset window
+				{postF: checkEval[*InverseSet](22, matchStamps(1, 2))},         // clock + rWindow + 1== 22, outside reset window
 			},
 		},
 
@@ -251,8 +251,8 @@ func TestSetInverse(t *testing.T) {
 			steps: []step{
 				{line: "Match alpha."},
 				{line: "Match beta."},
-				{line: "Match gamma", postF: checkEval(2, checkNoFire)},
-				{line: "Match reset", stamp: 11, postF: checkEval(50, checkNoFire)},
+				{line: "Match gamma", postF: checkEval[*InverseSet](2, checkNoFire)},
+				{line: "Match reset", stamp: 11, postF: checkEval[*InverseSet](50, checkNoFire)},
 			},
 		},
 
@@ -519,7 +519,7 @@ func TestSetInverse(t *testing.T) {
 			steps: []step{
 				{line: "reset"},
 				{line: "reset"},
-				{line: "reset", postF: checkResets(0, 0)},
+				{line: "reset", postF: checkResets[InverseSet](0, 0)},
 			},
 		},
 
@@ -542,12 +542,12 @@ func TestSetInverse(t *testing.T) {
 			steps: []step{
 				{line: "reset"},
 				{line: "reset"},
-				{line: "reset", postF: checkResets(0, 3)},
-				{line: "NOOP", stamp: 72, postF: checkResets(0, 3)}, // window + reset window + 2 * abs(slide) + first reset + 1 for overlap
-				{line: "NOOP", postF: checkResets(0, 2)},            // should peel off one reset
-				{line: "NOOP", postF: checkResets(0, 1)},            // should peel off one reset
-				{line: "NOOP", postF: checkResets(0, 0)},            // should peel off one reset
-				{postF: checkGCMark(disableGC)},
+				{line: "reset", postF: checkResets[InverseSet](0, 3)},
+				{line: "NOOP", stamp: 72, postF: checkResets[InverseSet](0, 3)}, // window + reset window + 2 * abs(slide) + first reset + 1 for overlap
+				{line: "NOOP", postF: checkResets[InverseSet](0, 2)},            // should peel off one reset
+				{line: "NOOP", postF: checkResets[InverseSet](0, 1)},            // should peel off one reset
+				{line: "NOOP", postF: checkResets[InverseSet](0, 0)},            // should peel off one reset
+				{postF: checkGCMark[InverseSet](disableGC)},
 			},
 		},
 
