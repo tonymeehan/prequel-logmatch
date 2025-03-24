@@ -3,8 +3,9 @@ package match
 import "errors"
 
 var (
-	ErrAnchorRange  = errors.New("anchor out of range")
+	ErrNoTerms      = errors.New("no terms")
 	ErrTooManyTerms = errors.New("too many terms")
+	ErrAnchorRange  = errors.New("anchor out of range")
 )
 
 var capThreshold = 4
@@ -81,6 +82,11 @@ func calcGCWindow(window int64, resets []resetT) (int64, int64) {
 		if reset.slide < left {
 			left = reset.slide
 		}
+	}
+	// Add tick to right because we will need to assert tick one past the reset window,
+	// to establish that no reset occurred as a duplicate timestamp event at the end of the reset window.
+	if len(resets) > 0 {
+		right += 1
 	}
 
 	return (-1 * left), right

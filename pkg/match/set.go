@@ -1,10 +1,15 @@
 package match
 
-import "math"
+import (
+	"math"
+
+	"github.com/rs/zerolog/log"
+)
 
 const disableGC int64 = math.MaxInt64
 
 type MatchSet struct {
+	clock   int64
 	window  int64
 	gcMark  int64
 	hotMask bitMaskT
@@ -33,6 +38,15 @@ func NewMatchSet(window int64, setTerms ...string) (*MatchSet, error) {
 }
 
 func (r *MatchSet) Scan(e LogEntry) (hits Hits) {
+	if e.Timestamp < r.clock {
+		log.Warn().
+			Str("line", e.Line).
+			Int64("stamp", e.Timestamp).
+			Int64("clock", r.clock).
+			Msg("MatchSet: Out of order event.")
+		return
+	}
+	r.clock = e.Timestamp
 
 	r.maybeGC(e.Timestamp)
 
@@ -104,7 +118,7 @@ func (r *MatchSet) GarbageCollect(clock int64) {
 		}
 
 		if cnt > 0 {
-			shiftLeft(r.terms, i, 1)
+			shiftLeft(r.terms, i, cnt)
 		}
 
 		m := r.terms[i].asserts
@@ -118,6 +132,5 @@ func (r *MatchSet) GarbageCollect(clock int64) {
 
 // Because match sequence is edge triggered, there won't be hits.  But can GC.
 func (r *MatchSet) Eval(clock int64) (h Hits) {
-	r.maybeGC(clock)
 	return
 }

@@ -189,6 +189,15 @@ func (r *InverseSeq) maybeGC(clock int64) {
 // Remove all terms that are older than the window.
 func (r *InverseSeq) GarbageCollect(clock int64) {
 
+	// Special case;
+	// If all the terms are hot and we have resets,
+	// allow the GC to be handled on the next evaluation.
+	// Otherwise, we may GC an valid single term prematurely.
+	if r.nActive == len(r.terms) && len(r.resets) > 0 {
+		r.gcMark = disableGC
+		return
+	}
+
 	var (
 		cnt      int
 		nMark    = disableGC
@@ -318,8 +327,10 @@ func (r *InverseSeq) checkReset(clock int64) (int64, uint8) {
 		}
 
 		// If the reset window is in the future, we cannot come to a conclusion.
-		if stop > clock {
-			return stop - clock, math.MaxUint8
+		// We must wait until the reset window is in the past due to events with
+		// duplicate timestamps.  Thus must wait until one tick past the reset window.
+		if stop >= clock {
+			return stop - clock + 1, math.MaxUint8
 		}
 	}
 

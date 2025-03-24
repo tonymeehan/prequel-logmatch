@@ -1,156 +1,152 @@
 package match
 
-import "testing"
+import (
+	"testing"
 
-func TestSetSingle(t *testing.T) {
+	"github.com/prequel-dev/prequel-logmatch/pkg/entry"
+)
 
-	var (
-		clock  int64 = 0
-		window int64 = 10
-	)
-	sm, err := NewMatchSet(window, "alpha")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
+func TestSet(t *testing.T) {
+
+	type step = stepT[MatchSet]
+
+	var tests = map[string]struct {
+		clock  int64
+		window int64
+		terms  []string
+		steps  []step
+	}{
+		"SingleTerm": {
+			// -A---------------- alpha
+			window: 10,
+			terms:  []string{"alpha"},
+			steps: []step{
+				{line: "alpha", cb: matchStamps(1)},
+			},
+		},
+
+		"IgnoreOutOfOrder": {
+			// -1------ alpha
+			// 2------- beta
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			steps: []step{
+				{line: "alpha", stamp: 2},
+				{line: "beta", stamp: 1},
+			},
+		},
+
+		"Simple": {
+			// A--------E-------
+			// -----C-------G-H--
+			// --B-----D--F------
+			// Should see {A,C,B} {E,G,D}
+			window: 50,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "gamma"},
+				{line: "beta", cb: matchStamps(1, 3, 2)},
+				{line: "gamma"},
+				{line: "alpha"},
+				{line: "gamma"},
+				{line: "beta", cb: matchStamps(5, 7, 4), postF: checkHotMask[MatchSet](0b100)},
+				{line: "beta", postF: checkHotMask[MatchSet](0b110)},
+			},
+		},
+
+		"Window": {
+			// A----------D------
+			// --------C---------
+			// -----B-------E----
+			// With window of 5. should see {D,C,B}
+			window: 5,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "gamma", stamp: 4},
+				{line: "beta", stamp: 7},
+				{line: "alpha", stamp: 8, cb: matchStamps(8, 7, 4)},
+				{line: "gamma", stamp: 9, postF: checkHotMask[MatchSet](0b100)},
+			},
+		},
+
+		"DupeTimestamps": {
+			// -A----------------
+			// -B----------------
+			// -C----------------
+			// Dupe timestamps are tolerated.
+			window: 5,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []step{
+				{line: "alpha", stamp: 1},
+				{line: "gamma", stamp: 1},
+				{line: "beta", stamp: 1, cb: matchStamps(1, 1, 1)},
+			},
+		},
+
+		"GarbageCollectOldTerms": {
+			// -1------4--------------10----------
+			// ---2--3----------8---9-----11----
+			// ----------5--6-7---------------12-
+			// Should fire {1,2,5}, {4,3,6}, {10,8,7}
+			window: 50,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "beta"},
+				{line: "beta"},
+				{line: "alpha"},
+				{line: "gamma", cb: matchStamps(1, 2, 5)},
+				{line: "gamma", cb: matchStamps(4, 3, 6)},
+				{line: "gamma"},
+				{line: "beta"},
+				{line: "beta"},
+				{line: "alpha", cb: matchStamps(10, 8, 7)},
+				{line: "beta"},
+				{line: "gamma", postF: garbageCollect[*MatchSet](50)}, // window
+				{postF: checkHotMask[MatchSet](0b110)},
+				{postF: garbageCollect[*MatchSet](73)},
+				{postF: checkHotMask[MatchSet](0b0)},
+			},
+		},
 	}
 
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			sm, err := NewMatchSet(tc.window, tc.terms...)
+			if err != nil {
+				t.Fatalf("Expected err == nil, got %v", err)
+			}
 
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
+			clock := tc.clock
 
-	if hits.Logs[0].Timestamp != clock+1 {
-		t.Errorf("Expected 3,4,5,8 got: %v", hits)
-	}
-}
+			for idx, step := range tc.steps {
 
-// -*****************
-// A--------E-------
-// -----C-------G-H--
-// --B-----D--F------
+				clock += 1
+				stamp := clock
+				if step.stamp != 0 {
+					stamp = step.stamp
+					clock = stamp
+				}
 
-// Should see {A,C,B, {E,G,D}
-func TestSetSimple(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 50
-	)
-	sm, err := NewMatchSet(window, "alpha", "beta", "gamma")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
+				if step.line != "" {
+					var (
+						entry = entry.LogEntry{Timestamp: stamp, Line: step.line}
+						hits  = sm.Scan(entry)
+					)
 
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
+					if step.cb == nil {
+						checkNoFire(t, idx+1, hits)
+					} else {
+						step.cb(t, idx+1, hits)
+					}
+				}
 
-	hits = sm.Scan(LogEntry{Timestamp: clock + 2, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 3, Line: "beta"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+1 || hits.Logs[1].Timestamp != clock+3 || hits.Logs[2].Timestamp != clock+2 {
-		t.Errorf("Expected 1,2,3 got: %v", hits)
-	}
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 4, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 5, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 6, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 7, Line: "beta"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+5 || hits.Logs[1].Timestamp != clock+7 || hits.Logs[2].Timestamp != clock+4 {
-		t.Errorf("Expected 4,6,5 got: %v", hits)
-	}
-
-	if sm.hotMask != 0b100 {
-		t.Errorf("Expected hotMask == 0b100, got %b", sm.hotMask)
-	}
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 8, Line: "beta"})
-	testNoFire(t, hits)
-
-	if sm.hotMask != 0b110 {
-		t.Errorf("Expected hotMask == 0b110, got %b", sm.hotMask)
-	}
-
-}
-
-// -*****************
-// A----------D------
-// --------C---------
-// -----B-------E----
-
-// With window of 5. should see {D,C,B}
-func TestSetWindow(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 5
-	)
-	sm, err := NewMatchSet(window, "alpha", "beta", "gamma")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 4, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 7, Line: "beta"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 8, Line: "alpha"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+8 || hits.Logs[1].Timestamp != clock+7 || hits.Logs[2].Timestamp != clock+4 {
-		t.Errorf("Expected 1,2,3 got: %v", hits)
-	}
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 9, Line: "gamma"})
-	testNoFire(t, hits)
-
-	if sm.hotMask != 0b100 {
-		t.Errorf("Expected hotMask == 0b100, got %b", sm.hotMask)
-	}
-}
-
-// Dupe timestamps are tolerated.
-func TestSetDupeTimestamps(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 5
-	)
-	sm, err := NewMatchSet(window, "alpha", "beta", "gamma")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 1, Line: "gamma"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 1, Line: "beta"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
+				if step.postF != nil {
+					step.postF(t, idx+1, sm)
+				}
+			}
+		})
 	}
 }

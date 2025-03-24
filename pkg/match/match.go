@@ -14,8 +14,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var ErrEmptyTerm = errors.New("empty term")
+
 type Matcher interface {
+	Eval(int64) Hits
 	Scan(e entry.LogEntry) Hits
+	GarbageCollect(int64)
 }
 
 type LogEntry = entry.LogEntry
@@ -61,6 +65,8 @@ type MatchFunc func(string) bool
 func makeMatchFunc(s string) (m MatchFunc, err error) {
 
 	switch {
+	case s == "":
+		err = ErrEmptyTerm
 	case strings.HasPrefix(s, "jq_"):
 		if m, err = makeJqMatch(s); err != nil {
 			err = fmt.Errorf("fail jq compile '%s': %w", s, err)

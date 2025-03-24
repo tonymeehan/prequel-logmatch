@@ -4,502 +4,239 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prequel-dev/prequel-logmatch/pkg/entry"
 	"github.com/rs/zerolog"
 )
 
-//********
-// --A--B--C-----
-// -----------D--
+func TestSeq(t *testing.T) {
 
-// Should fire *ONLY* {A,D},
-// not {A,D}, {B,D}, {C,D}
+	type step = stepT[MatchSeq]
 
-func TestSeqOverFire(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 10
-	)
-	sm, err := NewMatchSeq(window, "alpha", "beta")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
+	var tests = map[string]struct {
+		clock  int64
+		window int64
+		terms  []string
+		steps  []step
+	}{
+
+		"IgnoreOutOfOrder": {
+			// -1------ alpha
+			// 2------- beta
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			steps: []step{
+				{line: "alpha", stamp: 2},
+				{line: "beta", stamp: 1},
+			},
+		},
+
+		"Simple": {
+			// -1-------- alpha
+			// --2------- beta
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			steps: []step{
+				{line: "noop"},
+				{line: "beta"},
+				{line: "alpha"},
+				{line: "beta", cb: matchStamps(3, 4)},
+			},
+		},
+
+		"OverFire": {
+			// -123-----
+			// ----4----
+			// Should fire *ONLY* {1,4},
+			// not {2,4}, {3,4}
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "alpha"},
+				{line: "alpha"},
+				{line: "beta", cb: matchStamps(1, 4)},
+			},
+		},
+
+		"Overlap": {
+			// -12-4--7------
+			// ---3--6--9----
+			// -----5--8----A
+			// Should fire {1,3,5}, {2,6,8}, {4,9,A}
+			window: 20,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "alpha"},
+				{line: "beta"},
+				{line: "alpha"},
+				{line: "gamma", cb: matchStamps(1, 3, 5)},
+				{line: "beta"},
+				{line: "alpha"},
+				{line: "gamma", cb: matchStamps(2, 6, 8)},
+				{line: "beta"},
+				{line: "noop"},
+				{line: "noop"},
+				{line: "noop"},
+				{line: "gamma", cb: matchStamps(4, 9, 13)},
+				{postF: garbageCollect[*MatchSeq](7 + 20)},     // GC up to event 7 + window; can't GC until past the window
+				{postF: checkActive[MatchSeq](1)},              // '7' Should still be sitting around
+				{postF: garbageCollect[*MatchSeq](7 + 20 + 1)}, // Finish GC
+				{postF: checkActive[MatchSeq](0)},
+			},
+		},
+
+		"SimpleWindow": {
+			// -1------------ alpha
+			// ------------2- beta
+			// Second term is out of window; should not fire.
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "beta", stamp: 1 + 10 + 1, postF: checkActive[MatchSeq](0)}, // alpha stamp + window + 1
+			},
+		},
+
+		"SimpleWindow2": {
+			// -1------------ alpha
+			// ------------2- beta
+			// Second term is out of window; should not fire.
+			window: 10,
+			terms:  []string{"alpha", "beta"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "alpha"},
+				{line: "beta", stamp: 2 + 10 + 1, postF: checkActive[MatchSeq](0)}, // beta stamp + window + 1
+			},
+		},
+
+		"WindowOverlap": {
+			// -A----C--E---F----- alpha
+			// ---B---D-------G--- beta
+			// Exercise various window overlaps.
+			// Should fire {C,D} and {F,G}
+			window: 20,
+			terms:  []string{"alpha", "beta"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "noop", stamp: 1},
+				{line: "noop", stamp: 1},
+				{line: "noop", stamp: 1},
+				{line: "beta", stamp: 1 + 20 + 1},
+				{line: "alpha"},
+				{line: "beta", cb: matchStamps(23, 24)},
+				{line: "alpha", stamp: 25},
+				{line: "alpha", stamp: 35},
+				{line: "noop", stamp: 46},
+				{line: "beta", cb: matchStamps(35, 47), postF: checkActive[MatchSeq](0)},
+			},
+		},
+
+		"DupeTimestamps": {
+			// -1--------- alpha
+			// -2--------- beta
+			// -3--------- gamma
+			// Demonstrate that we can match N copies of the same line
+			window: 10,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []step{
+				{line: "alpha1", stamp: 1},
+				{line: "beta1", stamp: 1},
+				{line: "gamma1", stamp: 1, cb: matchLines("alpha1", "beta1", "gamma1")},
+			},
+		},
+
+		"GCOldTerms": {
+			// -1------4--------------10----------
+			// ---2--3----------8---9-----11----
+			// ----------5--6-7---------------12-
+			// Should fire {1,2,5}, {4,8,12}
+			window: 50,
+			terms:  []string{"alpha", "beta", "gamma"},
+			steps: []step{
+				{line: "alpha"},
+				{line: "beta"},
+				{line: "beta"},
+				{line: "alpha"},
+				{line: "gamma", cb: matchStamps(1, 2, 5)},
+				{line: "gamma"},
+				{line: "gamma"},
+				{line: "beta"},
+				{line: "beta"},
+				{line: "alpha"},
+				{line: "beta"},
+				{line: "gamma", cb: matchStamps(4, 8, 12)},
+				{postF: garbageCollect[*MatchSeq](12 + 50)}, // clock + window
+				{postF: checkActive[MatchSeq](0)},
+			},
+		},
+
+		"Dupes": {
+			// --1----3--4-5-6-------
+			// --1----3--4-5-6-------
+			// --1----3--4 5-6-------
+			// ----2-----------7--89-
+			// Because we are using a duplicate term, there is a possibility
+			// of overlapping fire events.  This test should ensure that
+			// the sequence matcher is able to handle this case.
+			// Above should fire {1,3,4,7} and {3,4,5,8}
+			window: 10,
+			terms:  []string{"Discarding message", "Discarding message", "Discarding message", "Mnesia overloaded"},
+			steps: []step{
+				{line: "Discarding message"},
+				{line: "Mnesia overloaded"},
+				{line: "Discarding message"},
+				{line: "Discarding message"},
+				{line: "Discarding message"},
+				{line: "Discarding message"},
+				{line: "Mnesia overloaded", cb: matchStamps(1, 3, 4, 7)},
+				{line: "Mnesia overloaded", cb: matchStamps(3, 4, 5, 8)},
+				{line: "Mnesia overloaded", stamp: 6 + 10 + 1}, // Because dupe timestamps are consider matches in a sequence, window has to be past the last "Discarding message" to prevent fire
+			},
+		},
 	}
 
-	hits := sm.Scan(LogEntry{Timestamp: clock + 1, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 2, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 3, Line: "alpha"})
-	testNoFire(t, hits)
-
-	hits = sm.Scan(LogEntry{Timestamp: clock + 4, Line: "beta"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+1 ||
-		hits.Logs[1].Timestamp != clock+4 {
-		t.Errorf("Expected 3,4,5,8 got: %v", hits)
-	}
-}
-
-// Test a simple sequence fire as expected.
-func TestSequenceSimple(t *testing.T) {
-	sm, err := NewMatchSeq(int64(time.Second), "shrubbery", "america")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	// Start with a non matching line; should not fire.
-	hits := sm.Scan(LogEntry{Timestamp: time.Now().UnixNano(), Line: "nope"})
-	testNoFire(t, hits)
-
-	// Next a line that matches the second but not the first; should be ignored.
-	hits = sm.Scan(LogEntry{Timestamp: time.Now().UnixNano(), Line: "I live in america"})
-	testNoFire(t, hits)
-
-	// Ok, let's match the first item; should not fire.
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Bring me a shrubbery"}
-	hits = sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Ok, match the second term; we should fire.
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Living in america! I feel good!"}
-	hits = sm.Scan(ev2)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
-		t.Errorf("Fail equal logs")
-	}
-}
-
-// Test sequence overlap processing.
-func TestSequenceOverlap(t *testing.T) {
-	window := int64(time.Minute)
-	sm, err := NewMatchSeq(window, "shrubbery", "america", "eleven")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	// Ok, let's match the first item; should not fire.
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Bring me a shrubbery"}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Ok, let's match the first item again; should not fire.
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Bring me a shrubbery now"}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Fire second event, should not cause a match
-	ev3 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Got to, this is america!"}
-	hits = sm.Scan(ev3)
-	testNoFire(t, hits)
-
-	// Add third matching instance of first term; still should not fire
-	ev4 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "A shrubbery is what I would like please."}
-	hits = sm.Scan(ev4)
-	testNoFire(t, hits)
-
-	// Ok, fire the third matching term; the first and second items should fire, but not the third.
-	ev5 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "The numbers all go to eleven"}
-	hits = sm.Scan(ev5)
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs[:3], []LogEntry{ev1, ev3, ev5}) {
-		t.Errorf("Fail equal logs")
-	}
-
-	// Cool, now fire second matcher; should not fire
-	ev6 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Made in america!"}
-	hits = sm.Scan(ev6)
-	testNoFire(t, hits)
-
-	// Add another starter to create a new frame, should not fire.
-	ev7 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Mares eat oats, not shrubbery."}
-	hits = sm.Scan(ev7)
-	testNoFire(t, hits)
-
-	// This should fire the hotFrame, but not pending.
-	ev8 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "One more than ten is eleven."}
-	hits = sm.Scan(ev8)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev2, ev6, ev8}) {
-		t.Errorf("Fail log match")
-	}
-
-	//  Run second match; should not fire
-	ev9 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "I took a swim in the Gulf of america."}
-	hits = sm.Scan(ev9)
-	testNoFire(t, hits)
-
-	// Just for fun, fire some noops
-	fireNoops(t, sm, 11)
-
-	// Run third match, last pending should fire.
-	ev10 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "One more than ten is eleven."}
-	hits = sm.Scan(ev10)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev4, ev9, ev10}) {
-		t.Errorf("Fail equal logs")
-	}
-
-	// Fire out side the window; should cleanup ev7
-	sm.GarbageCollect(ev7.Timestamp + window + 1)
-
-	expectCleanState(t, sm)
-}
-
-// Test that sequence times out after window.
-func TestSequenceWindow(t *testing.T) {
-	sm, err := NewMatchSeq(int64(time.Second), "frank", "burns")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	// First event matching first term, should  not fire.
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Let's be frank."}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Wait the window
-	time.Sleep(time.Duration(sm.window))
-
-	// Fire second matching term, should not fire.
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Ouch, that burns."}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
-
-	expectCleanState(t, sm)
-}
-
-// Test that sequence times out after window even if pending match exists.
-func TestSequenceWindow2(t *testing.T) {
-	sm, err := NewMatchSeq(int64(time.Second), "frank", "burns")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	// Scan first event, should not fire.
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Let's be frank."}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Fire matching first event again, should pend and not fire.
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Let's be frank for reals."}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Wait the window; this should timeout both intial events.
-	time.Sleep(time.Duration(sm.window))
-
-	// Now fire ev2, should get no match because intial events timed out on window.
-	ev3 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Ouch, that burns."}
-	hits = sm.Scan(ev3)
-	testNoFire(t, hits)
-
-	expectCleanState(t, sm)
-
-}
-
-// Time window timeout on overlapping sequences.
-func TestSequenceWindowOverlap(t *testing.T) {
-	sm, err := NewMatchSeq(int64(time.Second), "frank", "burns")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	// Set up partial match, should not fire
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Let's be frank."}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Just for fun, fire some noops
-	fireNoops(t, sm, 100)
-
-	// Wait for timer to fire;
-	time.Sleep(time.Duration(sm.window))
-
-	// Now scan matching ev2, should not fire.
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Ouch, that burns."}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Validate that the events are good by firing two in a row immediately.
-	// (Adjust timestamps to adhere to increasing invariant)
-	ev1.Timestamp = time.Now().UnixNano()
-	hits = sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Scan ev2 again with new timestamp. should fire.
-	ev2.Timestamp = time.Now().UnixNano()
-	hits = sm.Scan(ev2)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2}) {
-		t.Errorf("Fail log match")
-	}
-
-	// Fire two initial frame matchers, somewhat delayed from each other.
-	ev3 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "The name is frank."}
-	hits = sm.Scan(ev3)
-	testNoFire(t, hits)
-
-	time.Sleep(time.Duration(sm.window) / 2)
-
-	ev4 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "The name is frank again."}
-	hits = sm.Scan(ev4)
-	testNoFire(t, hits)
-
-	// Wait for first item to roll off
-	time.Sleep(time.Duration(sm.window) / 2)
-
-	// Now fire second matcher; should complete pending frame.
-	ev5 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "OOOOH burns"}
-	hits = sm.Scan(ev5)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev4, ev5}) {
-		t.Errorf("Fail log match")
-	}
-
-	expectCleanState(t, sm)
-}
-
-// Demonstrate that we can match N copies of the same line
-func TestMatchDupes(t *testing.T) {
-	sm, err := NewMatchSeq(int64(time.Minute), "frank", "frank", "frank")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	// Set up partial match, should not fire
-	ev1 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Let's be frank."}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	// Set up partial match, should not fire
-	ev2 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Let's be frank duex."}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
-
-	// Third time is a charm; fire.
-
-	ev3 := LogEntry{Timestamp: time.Now().UnixNano(), Line: "Let's be frank trois."}
-	hits = sm.Scan(ev3)
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected cnt 1, got: %v", hits.Cnt)
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			sm, err := NewMatchSeq(tc.window, tc.terms...)
+			if err != nil {
+				t.Fatalf("Expected err == nil, got %v", err)
+			}
+
+			clock := tc.clock
+
+			for idx, step := range tc.steps {
+
+				clock += 1
+				stamp := clock
+				if step.stamp != 0 {
+					stamp = step.stamp
+					clock = stamp
+				}
+
+				if step.line != "" {
+					var (
+						entry = entry.LogEntry{Timestamp: stamp, Line: step.line}
+						hits  = sm.Scan(entry)
+					)
+
+					if step.cb == nil {
+						checkNoFire(t, idx+1, hits)
+					} else {
+						step.cb(t, idx+1, hits)
+					}
+				}
+
+				if step.postF != nil {
+					step.postF(t, idx+1, sm)
+				}
+			}
+		})
 	}
 }
 
-//*******
-// -1------4--------------10----------
-// ---2--3----------8---9-----11----
-// ----------5--6-7---------------12-
-// Should fire {1,2,5}, {4,8,12}
-
-func TestSeqGCOldSecondaryTerms(t *testing.T) {
-	var (
-		clock  int64 = 0
-		window int64 = 50
-	)
-
-	sm, err := NewMatchSeq(window, "alpha", "beta", "gamma")
-	if err != nil {
-		t.Fatalf("Expected err == nil, got %v", err)
-	}
-
-	clock += 1
-	ev1 := LogEntry{Timestamp: clock, Line: "alpha"}
-	hits := sm.Scan(ev1)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev2 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev2)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev3 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev3)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev4 := LogEntry{Timestamp: clock, Line: "alpha"}
-	hits = sm.Scan(ev4)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev5 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev5)
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev1, ev2, ev5}) {
-		t.Errorf("Fail log match")
-	}
-
-	clock += 1
-	ev6 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev6)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev7 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev7)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev8 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev8)
-	testNoFire(t, hits)
-
-	clock += 1
-	ev9 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev9)
-
-	clock += 1
-	ev10 := LogEntry{Timestamp: clock, Line: "alpha"}
-	hits = sm.Scan(ev10)
-
-	clock += 1
-	ev11 := LogEntry{Timestamp: clock, Line: "beta"}
-	hits = sm.Scan(ev11)
-
-	clock += 1
-	ev12 := LogEntry{Timestamp: clock, Line: "gamma"}
-	hits = sm.Scan(ev12)
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected hits.Cnt == 1, got %v", hits.Cnt)
-	}
-
-	if !testEqualLogs(t, hits.Logs, []LogEntry{ev4, ev8, ev12}) {
-		t.Errorf("Fail log match")
-	}
-
-	sm.GarbageCollect(clock + window)
-
-	expectCleanState(t, sm)
-}
-
-// -**********
-// --1----3--4-5-6-----
-// --1----3--4-5-6-----
-// --1----3--4 5-6-----
-// ----2-----------7--8
-
-// Because we are using a duplicate term, there is a possibility
-// of overlapping fire events.  This test should ensure that
-// the sequence matcher is able to handle this case.
-// Above should fire {1,3,4,7} and {3,4,5,8}
-func TestSeqDupes(t *testing.T) {
-	var (
-		clock   int64 = 0
-		sWindow int64 = 10
-	)
-
-	iq, err := NewMatchSeq(
-		sWindow,
-		"Discarding message",
-		"Discarding message",
-		"Discarding message",
-		"Mnesia overloaded",
-	)
-	if err != nil {
-		t.Fatalf("Fail constructor: %v", err)
-	}
-
-	// Emit first row.
-	hits := iq.Scan(LogEntry{Timestamp: clock + 1, Line: "Discarding message"})
-	testNoFire(t, hits)
-
-	// Emit last item, should not fire.
-	hits = iq.Scan(LogEntry{Timestamp: clock + 2, Line: "Mnesia overloaded"})
-	testNoFire(t, hits)
-
-	// Emit first item 4 times; should not fire until "Mnesia overloaded again"
-	hits = iq.Scan(LogEntry{Timestamp: clock + 3, Line: "Discarding message"})
-	testNoFire(t, hits)
-
-	hits = iq.Scan(LogEntry{Timestamp: clock + 4, Line: "Discarding message"})
-	testNoFire(t, hits)
-
-	hits = iq.Scan(LogEntry{Timestamp: clock + 5, Line: "Discarding message"})
-	testNoFire(t, hits)
-
-	hits = iq.Scan(LogEntry{Timestamp: clock + 6, Line: "Discarding message"})
-	testNoFire(t, hits)
-
-	// Emit last item, should fire once
-	hits = iq.Scan(LogEntry{Timestamp: clock + 7, Line: "Mnesia overloaded"})
-
-	if hits.Cnt != 1 {
-		t.Errorf("Expected 1 hits, got: %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+1 ||
-		hits.Logs[1].Timestamp != clock+3 ||
-		hits.Logs[2].Timestamp != clock+4 ||
-		hits.Logs[3].Timestamp != clock+7 {
-		t.Fatalf("Expected 1,3,4,7 got: %v", hits)
-	}
-
-	// Should emit another
-	hits = iq.Scan(LogEntry{Timestamp: clock + 8, Line: "Mnesia overloaded"})
-
-	if hits.Cnt != 1 {
-		t.Fatalf("Expected 1 hits, got: %v", hits.Cnt)
-	}
-
-	if hits.Logs[0].Timestamp != clock+3 ||
-		hits.Logs[1].Timestamp != clock+4 ||
-		hits.Logs[2].Timestamp != clock+5 ||
-		hits.Logs[3].Timestamp != clock+8 {
-		t.Errorf("Expected 3,4,5,8 got: %v", hits)
-	}
-
-	hits = iq.Eval(clock + sWindow*2)
-
-	if hits.Cnt != 0 {
-		t.Errorf("Expected 0 hits, got: %v", hits.Cnt)
-	}
-
-	// Should fail out of window;
-	// clock+5 is the last hot zero event in the window,
-	// (if we were doing strict sequential, clock+6 would be the last hot event)
-	// adding sWindow + 1 should be out of window.
-	hits = iq.Scan(LogEntry{Timestamp: clock + 6 + sWindow + 1, Line: "Mnesia overloaded"})
-
-	if hits.Cnt != 0 {
-		t.Errorf("Expected 0 hits, got: %v", hits.Cnt)
-	}
-}
+// ----------
 
 func BenchmarkSequenceMisses(b *testing.B) {
 	sm, err := NewMatchSeq(int64(time.Second), "frank", "burns")
