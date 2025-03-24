@@ -5,9 +5,10 @@ import (
 )
 
 var (
-	ErrNoTerms      = errors.New("no terms")
-	ErrTooManyTerms = errors.New("too many terms")
-	ErrAnchorRange  = errors.New("anchor out of range")
+	ErrNoTerms       = errors.New("no terms")
+	ErrTooManyTerms  = errors.New("too many terms")
+	ErrAnchorRange   = errors.New("anchor out of range")
+	ErrDuplicateTerm = errors.New("duplicate term")
 )
 
 var capThreshold = 4

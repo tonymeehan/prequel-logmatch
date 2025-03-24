@@ -150,3 +150,12 @@ func TestSet(t *testing.T) {
 		})
 	}
 }
+
+// Dupes not yet implemented.
+func TestSetDupes(t *testing.T) {
+
+	_, err := NewMatchSet(10, "alpha", "alpha")
+	if err != ErrDuplicateTerm {
+		t.Fatalf("Expected err == ErrDuplicateTerm, got %v", err)
+	}
+}

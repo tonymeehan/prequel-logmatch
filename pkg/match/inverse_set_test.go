@@ -8,24 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func TestSetInverseBadAnchor(t *testing.T) {
-	var (
-		window int64 = 10
-
-		resets = []ResetT{
-			{
-				Term:   "Shutdown initiated",
-				Anchor: 11, // Bad anchor
-			},
-		}
-	)
-
-	_, err := NewInverseSet(window, []string{"alpha", "beta"}, resets)
-	if err != ErrAnchorRange {
-		t.Fatalf("Expected err == ErrAnchorRange, got %v", err)
-	}
-}
-
 func TestSetInverse(t *testing.T) {
 	type step = stepT[InverseSet]
 
@@ -619,6 +601,33 @@ func TestSetInverse(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSetInverseBadAnchor(t *testing.T) {
+	var (
+		window int64 = 10
+
+		resets = []ResetT{
+			{
+				Term:   "Shutdown initiated",
+				Anchor: 11, // Bad anchor
+			},
+		}
+	)
+
+	_, err := NewInverseSet(window, []string{"alpha", "beta"}, resets)
+	if err != ErrAnchorRange {
+		t.Fatalf("Expected err == ErrAnchorRange, got %v", err)
+	}
+}
+
+// Dupes not yet implemented.
+func TestSetInverseDupes(t *testing.T) {
+
+	_, err := NewInverseSet(10, []string{"alpha", "alpha"}, nil)
+	if err != ErrDuplicateTerm {
+		t.Fatalf("Expected err == ErrDuplicateTerm, got %v", err)
 	}
 }
 

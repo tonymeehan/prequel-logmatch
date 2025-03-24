@@ -30,6 +30,7 @@ func NewInverseSet(window int64, setTerms []string, resetTerms []ResetT) (*Inver
 
 	var (
 		resets []resetT
+		dupes  = make(map[string]struct{})
 		terms  = make([]termT, 0, len(setTerms))
 	)
 
@@ -39,6 +40,10 @@ func NewInverseSet(window int64, setTerms []string, resetTerms []ResetT) (*Inver
 			return nil, err
 		}
 		terms = append(terms, termT{matcher: m})
+		if _, ok := dupes[term]; ok {
+			return nil, ErrDuplicateTerm
+		}
+		dupes[term] = struct{}{}
 	}
 
 	if len(resetTerms) > 0 {
