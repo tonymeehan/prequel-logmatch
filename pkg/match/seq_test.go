@@ -195,6 +195,130 @@ func TestSeq(t *testing.T) {
 				{line: "Mnesia overloaded", stamp: 6 + 10 + 1}, // Because dupe timestamps are consider matches in a sequence, window has to be past the last "Discarding message" to prevent fire
 			},
 		},
+
+		"FireMultiplesProperlyWithWindowMiss": {
+			// -12345------------ dupe
+			// --2345------------ dupe
+			// ---345------------ dupe
+			// ----------8------- fire
+			window: 4,
+			terms:  []string{"dupe", "dupe", "dupe", "fire"},
+			steps: []step{
+				{line: "dupe"}, //window [1,5]
+				{line: "dupe"}, //window [2,6]
+				{line: "dupe"}, //window [3,7]
+				{line: "dupe"},
+				{line: "dupe"},
+				{line: "fire", stamp: 8}, // Should not fire  cause out of window.
+			},
+		},
+
+		"FireMultiplesProperlyWithWindowHit": {
+			// -1234567----------- dupe
+			// --234567----------- dupe
+			// ---34567----------- dupe
+			// --------8---------- fire
+			// Should fire {5,6,7,8}
+			window: 3,
+			terms:  []string{"dupe", "dupe", "dupe", "fire"},
+			steps: []step{
+				{line: "dupe1"},
+				{line: "dupe2"},
+				{line: "dupe3"},
+				{line: "dupe4"},
+				{line: "dupe5"},
+				{line: "dupe6"},
+				{line: "dupe7"},
+				{line: "fire", stamp: 8, cb: matchLines("dupe5", "dupe6", "dupe7", "fire")},
+			},
+		},
+
+		"FireMultiplesProperlyWithWindowHitSameTimestamp": {
+			// -1234567----------- dupe
+			// --234567----------- dupe
+			// ---34567----------- dupe
+			// --------89---------- fire
+			// Should fire {1,2,3,8},{2,3,4,9} due to same timestamp
+			window: 3,
+			terms:  []string{"dupe", "dupe", "dupe", "fire"},
+			steps: []step{
+				{line: "dupe1", stamp: 1},
+				{line: "dupe2", stamp: 1},
+				{line: "dupe3", stamp: 1},
+				{line: "dupe4", stamp: 1},
+				{line: "dupe5", stamp: 1},
+				{line: "dupe6", stamp: 1},
+				{line: "dupe7", stamp: 1},
+				{line: "fire1", stamp: 1, cb: matchLines("dupe1", "dupe2", "dupe3", "fire1")},
+				{line: "fire2", stamp: 2, cb: matchLines("dupe2", "dupe3", "dupe4", "fire2")},
+			},
+		},
+
+		"FireDisjointMultiples": {
+			// -12-456-89---------- dupe
+			// --2-456-89---------- dupe
+			// ---3---7------------ disjoint
+			// ----456-89---------- dupe
+			// ----456-89---------- dupe
+			// ----------A--------- fire
+			// Should fire {5,6,7,8,9,A}
+			window: 5,
+			terms:  []string{"dupe", "dupe", "disjoint", "dupe", "dupe", "fire"},
+			steps: []step{
+				{line: "1_dupe"},
+				{line: "2_dupe"},
+				{line: "3_disjoint"},
+				{line: "4_dupe"},
+				{line: "5_dupe"},
+				{line: "6_dupe"},
+				{line: "7_disjoint"},
+				{line: "8_dupe"},
+				{line: "9_dupe"},
+				{line: "A_fire", cb: matchLines("5_dupe", "6_dupe", "7_disjoint", "8_dupe", "9_dupe", "A_fire")},
+			},
+		},
+
+		"FireDistinctMultiplesMiss": {
+			// --1234----- alpha
+			// ---234----- alpha
+			// ------56--- beta
+			// -------6--- beta
+			// ---------A- fire
+			// Should not fire; alpha line 2 is out of window.
+			window: 4,
+			terms:  []string{"alpha", "alpha", "beta", "beta", "fire"},
+			steps: []step{
+				{line: "1_alpha"},
+				{line: "2_alpha"},
+				{line: "3_alpha"},
+				{line: "4_alpha"},
+				{line: "5_beta"},
+				{line: "6_beta"},
+				{line: "8_fire", stamp: 8},
+			},
+		},
+
+		"FireDistinctMultiplesHit": {
+			// --12345----- alpha
+			// ---2345----- alpha
+			// -------678-- beta
+			// --------78-- beta
+			// ---------8-- fire
+			// Should fire {3,4,6,7,8}.
+			window: 5,
+			terms:  []string{"alpha", "alpha", "beta", "beta", "fire"},
+			steps: []step{
+				{line: "1_alpha"},
+				{line: "2_alpha"},
+				{line: "3_alpha"},
+				{line: "4_alpha"},
+				{line: "5_alpha"},
+				{line: "6_beta"},
+				{line: "7_beta"},
+				{line: "8_beta"},
+				{line: "8_fire", stamp: 8, cb: matchLines("3_alpha", "4_alpha", "6_beta", "7_beta", "8_fire")},
+			},
+		},
 	}
 
 	for name, tc := range tests {

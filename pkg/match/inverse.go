@@ -1,6 +1,8 @@
 package match
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	ErrNoTerms      = errors.New("no terms")
