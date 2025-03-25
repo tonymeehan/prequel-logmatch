@@ -323,7 +323,7 @@ func TestSeq(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			sm, err := NewMatchSeq(tc.window, tc.terms...)
+			sm, err := NewMatchSeq(tc.window, makeTerms(tc.terms)...)
 			if err != nil {
 				t.Fatalf("Expected err == nil, got %v", err)
 			}
@@ -363,7 +363,7 @@ func TestSeq(t *testing.T) {
 // ----------
 
 func BenchmarkSequenceMisses(b *testing.B) {
-	sm, err := NewMatchSeq(int64(time.Second), "frank", "burns")
+	sm, err := NewMatchSeq(int64(time.Second), makeTermsA("frank", "burns")...)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -384,7 +384,7 @@ func TestSeqTimestampOutofOrder(t *testing.T) {
 		window int64 = 10
 	)
 
-	sm, err := NewMatchSeq(window, "alpha", "gamma")
+	sm, err := NewMatchSeq(window, makeTermsA("alpha", "gamma")...)
 	if err != nil {
 		t.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -410,7 +410,7 @@ func TestSeqDupeTimestamps(t *testing.T) {
 		window int64 = 10
 	)
 
-	sm, err := NewMatchSeq(window, "alpha", "gamma")
+	sm, err := NewMatchSeq(window, makeTermsA("alpha", "gamma")...)
 	if err != nil {
 		t.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -465,7 +465,7 @@ func expectCleanState(t *testing.T, sm *MatchSeq) {
 }
 
 func BenchmarkSequenceHitSequence(b *testing.B) {
-	sm, err := NewMatchSeq(int64(time.Second), "frank", "burns")
+	sm, err := NewMatchSeq(int64(time.Second), makeTermsA("frank", "burns")...)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -488,7 +488,7 @@ func BenchmarkSequenceHitSequence(b *testing.B) {
 }
 
 func BenchmarkSequenceHitOverlap(b *testing.B) {
-	sm, err := NewMatchSeq(int64(time.Second), "frank", "burns")
+	sm, err := NewMatchSeq(int64(time.Second), makeTermsA("frank", "burns")...)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -524,7 +524,7 @@ func BenchmarkSeqRunawayMatch(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	defer zerolog.SetGlobalLevel(level)
 
-	sm, err := NewMatchSeq(1000000, "frank", "burns")
+	sm, err := NewMatchSeq(1000000, makeTermsA("frank", "burns")...)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}

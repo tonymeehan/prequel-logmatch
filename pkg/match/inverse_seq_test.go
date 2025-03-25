@@ -21,13 +21,13 @@ func TestSeqInverseBadReset(t *testing.T) {
 
 		resets = []ResetT{
 			{
-				Term:   "Shutdown initiated",
+				Term:   makeRaw("Shutdown initiated"),
 				Anchor: 11, // Bad anchor
 			},
 		}
 	)
 
-	_, err := NewInverseSeq(window, []string{"alpha", "beta"}, resets)
+	_, err := NewInverseSeq(window, makeTermsA("alpha", "beta"), resets)
 	if err != ErrAnchorRange {
 		t.Fatalf("Expected err == ErrAnchorRange, got %v", err)
 	}
@@ -59,7 +59,7 @@ func TestSeqInverse(t *testing.T) {
 			reset: []ResetT{
 				{
 					Window: 10,
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 				},
 			},
 			steps: []step{
@@ -76,7 +76,7 @@ func TestSeqInverse(t *testing.T) {
 			reset: []ResetT{
 				{
 					Window: 10,
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 				},
 			},
 			steps: []step{
@@ -93,7 +93,7 @@ func TestSeqInverse(t *testing.T) {
 			window: 10,
 			terms:  []string{"alpha"},
 			reset: []ResetT{{
-				Term: "reset",
+				Term: makeRaw("reset"),
 			}}, // Simple relative reset
 			steps: []step{
 				{line: "alpha", stamp: 1},
@@ -123,7 +123,7 @@ func TestSeqInverse(t *testing.T) {
 			window: 10,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{{
-				Term: "reset",
+				Term: makeRaw("reset"),
 			}}, // Simple relative reset
 			steps: []step{
 				{line: "alpha", stamp: 1},
@@ -140,7 +140,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   50,
 					Absolute: true,
 				},
@@ -161,7 +161,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   50,
 					Absolute: true,
 				},
@@ -181,7 +181,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   50,
 					Absolute: true,
 				},
@@ -216,7 +216,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Slide:    -5,
 					Window:   20,
 					Absolute: true,
@@ -242,7 +242,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Slide:    5,
 					Window:   20,
 					Absolute: true,
@@ -271,7 +271,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta", "gamma"},
 			reset: []ResetT{
 				{
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 					Window: 10,
 				},
 			},
@@ -292,7 +292,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   10,
 					Absolute: true,
 					Anchor:   1,
@@ -317,7 +317,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta", "gamma"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   5,
 					Absolute: true,
 					Anchor:   2,
@@ -343,8 +343,8 @@ func TestSeqInverse(t *testing.T) {
 			window: 50,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 			},
 			steps: []step{
 				{line: "alpha"},
@@ -367,10 +367,10 @@ func TestSeqInverse(t *testing.T) {
 			window: 50,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 				{
-					Term:     "reset3",
+					Term:     makeRaw("reset3"),
 					Window:   100,
 					Absolute: true,
 				},
@@ -387,10 +387,10 @@ func TestSeqInverse(t *testing.T) {
 			window: 50,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 				{
-					Term:     "reset3",
+					Term:     makeRaw("reset3"),
 					Window:   100,
 					Absolute: true,
 				},
@@ -408,7 +408,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   20,
 					Absolute: true,
 				},
@@ -426,10 +426,10 @@ func TestSeqInverse(t *testing.T) {
 			window: 10,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 				{
-					Term:     "reset3",
+					Term:     makeRaw("reset3"),
 					Absolute: false,
 					Window:   5,
 				},
@@ -485,7 +485,7 @@ func TestSeqInverse(t *testing.T) {
 			},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   20,
 					Absolute: true,
 				},
@@ -516,7 +516,7 @@ func TestSeqInverse(t *testing.T) {
 			},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   20,
 					Absolute: true,
 				},
@@ -560,7 +560,7 @@ func TestSeqInverse(t *testing.T) {
 		"ResetsIgnoreOnNoMatch": {
 			window: 10,
 			terms:  []string{"alpha", "beta", "gamma"},
-			reset:  []ResetT{{Term: "reset"}},
+			reset:  []ResetT{{Term: makeRaw("reset")}},
 			steps: []step{
 				{line: "reset"},
 				{line: "reset"},
@@ -574,7 +574,7 @@ func TestSeqInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta", "gamma"},
 			reset: []ResetT{
 				{
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 					Slide:  -10,
 					Window: 20,
 				},
@@ -745,7 +745,7 @@ func TestSeqInverse(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			sm, err := NewInverseSeq(tc.window, tc.terms, tc.reset)
+			sm, err := NewInverseSeq(tc.window, makeTerms(tc.terms), tc.reset)
 			if err != nil {
 				t.Fatalf("Expected err == nil, got %v", err)
 			}
@@ -785,7 +785,7 @@ func TestSeqInverse(t *testing.T) {
 // --------------------
 
 func BenchmarkSeqInverseMisses(b *testing.B) {
-	sm, err := NewInverseSeq(int64(time.Second), []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSeq(int64(time.Second), makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -803,13 +803,13 @@ func BenchmarkSeqInverseMissesWithReset(b *testing.B) {
 
 	resets := []ResetT{
 		{
-			Term:     "badterm",
+			Term:     makeRaw("badterm"),
 			Window:   1000,
 			Absolute: true,
 		},
 	}
 
-	sm, err := NewInverseSeq(int64(time.Second), []string{"frank", "burns"}, resets)
+	sm, err := NewInverseSeq(int64(time.Second), makeTermsA("frank", "burns"), resets)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -828,7 +828,7 @@ func BenchmarkSeqInverseHitSequence(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	defer zerolog.SetGlobalLevel(level)
 
-	sm, err := NewInverseSeq(int64(time.Second), []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSeq(int64(time.Second), makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -855,7 +855,7 @@ func BenchmarkSeqInverseHitOverlap(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	defer zerolog.SetGlobalLevel(level)
 
-	sm, err := NewInverseSeq(10, []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSeq(10, makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -891,7 +891,7 @@ func BenchmarkSeqInverseRunawayMatch(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	defer zerolog.SetGlobalLevel(level)
 
-	sm, err := NewInverseSeq(1000000, []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSeq(1000000, makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}

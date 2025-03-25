@@ -8,8 +8,8 @@ type MatchSingle struct {
 	matcher MatchFunc
 }
 
-func NewMatchSingle(str string) (*MatchSingle, error) {
-	m, err := makeMatchFunc(str)
+func NewMatchSingle(term TermT) (*MatchSingle, error) {
+	m, err := term.NewMatcher()
 	if err != nil {
 		return nil, err
 	}

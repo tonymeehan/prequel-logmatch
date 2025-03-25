@@ -16,9 +16,10 @@ type MatchSet struct {
 	terms   []termT
 }
 
-func NewMatchSet(window int64, setTerms ...string) (*MatchSet, error) {
+func NewMatchSet(window int64, setTerms ...TermT) (*MatchSet, error) {
+
 	var (
-		dupes  = make(map[string]struct{})
+		dupes  = make(map[TermT]struct{})
 		nTerms = len(setTerms)
 		terms  = make([]termT, nTerms)
 	)
@@ -32,7 +33,7 @@ func NewMatchSet(window int64, setTerms ...string) (*MatchSet, error) {
 	}
 
 	for i, term := range setTerms {
-		if m, err := makeMatchFunc(term); err != nil {
+		if m, err := term.NewMatcher(); err != nil {
 			return nil, err
 		} else {
 			terms[i].matcher = m

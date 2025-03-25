@@ -114,7 +114,7 @@ func TestSet(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			sm, err := NewMatchSet(tc.window, tc.terms...)
+			sm, err := NewMatchSet(tc.window, makeTerms(tc.terms)...)
 			if err != nil {
 				t.Fatalf("Expected err == nil, got %v", err)
 			}
@@ -154,7 +154,7 @@ func TestSet(t *testing.T) {
 // Dupes not yet implemented.
 func TestSetDupes(t *testing.T) {
 
-	_, err := NewMatchSet(10, "alpha", "alpha")
+	_, err := NewMatchSet(10, makeTermsA("alpha", "alpha")...)
 	if err != ErrDuplicateTerm {
 		t.Fatalf("Expected err == ErrDuplicateTerm, got %v", err)
 	}

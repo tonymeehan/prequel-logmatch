@@ -25,11 +25,11 @@ type MatchSeq struct {
 	terms    []termT
 }
 
-func NewMatchSeq(window int64, terms ...string) (*MatchSeq, error) {
+func NewMatchSeq(window int64, terms ...TermT) (*MatchSeq, error) {
 	var (
 		nTerms   = len(terms)
 		termL    = make([]termT, nTerms)
-		dupes    = make(map[string]int, nTerms)
+		dupes    = make(map[TermT]int, nTerms)
 		dupeMask bitMaskT
 	)
 
@@ -51,7 +51,7 @@ func NewMatchSeq(window int64, terms ...string) (*MatchSeq, error) {
 	}
 
 	for i, term := range terms {
-		if m, err := makeMatchFunc(term); err != nil {
+		if m, err := term.NewMatcher(); err != nil {
 			return nil, err
 		} else {
 			termL[i].matcher = m

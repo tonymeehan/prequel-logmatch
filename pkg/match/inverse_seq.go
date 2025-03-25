@@ -20,12 +20,12 @@ type InverseSeq struct {
 	resets   []resetT
 }
 
-func NewInverseSeq(window int64, seqTerms []string, resetTerms []ResetT) (*InverseSeq, error) {
+func NewInverseSeq(window int64, seqTerms []TermT, resetTerms []ResetT) (*InverseSeq, error) {
 
 	var (
 		resets   []resetT
 		terms    = make([]termT, 0, len(seqTerms))
-		dupes    = make(map[string]int, len(seqTerms))
+		dupes    = make(map[TermT]int, len(seqTerms))
 		dupeMask bitMaskT
 	)
 
@@ -47,7 +47,7 @@ func NewInverseSeq(window int64, seqTerms []string, resetTerms []ResetT) (*Inver
 	}
 
 	for i, term := range seqTerms {
-		m, err := makeMatchFunc(term)
+		m, err := term.NewMatcher()
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +61,7 @@ func NewInverseSeq(window int64, seqTerms []string, resetTerms []ResetT) (*Inver
 		resets = make([]resetT, 0, len(resetTerms))
 
 		for _, term := range resetTerms {
-			m, err := makeMatchFunc(term.Term)
+			m, err := term.Term.NewMatcher()
 			switch {
 			case err != nil:
 				return nil, err
