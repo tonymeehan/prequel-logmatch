@@ -25,7 +25,7 @@ func NewInverseSeq(window int64, seqTerms []string, resetTerms []ResetT) (*Inver
 	var (
 		resets   []resetT
 		terms    = make([]termT, 0, len(seqTerms))
-		dupes    = make(map[string]int)
+		dupes    = make(map[string]int, len(seqTerms))
 		dupeMask bitMaskT
 	)
 
@@ -302,9 +302,11 @@ func (r *InverseSeq) miniGC() {
 		zeroMatch = r.terms[0].asserts[0].Timestamp
 	)
 
-	// Do not allocate if not processing dupes
+	// Do not allocate if not processing dupes.
+	// Dupe detection  is used to prune duplicate terms
+	// that are incorrectly activated due to garbage collection.
 	if !r.dupeMask.Zeros() {
-		dupes = make(map[dupeT]struct{})
+		dupes = make(map[dupeT]struct{}, len(r.terms))
 		if r.dupeMask.IsSet(0) {
 			term := r.terms[0].asserts[0]
 			dupes[dupeT{
@@ -328,19 +330,21 @@ func (r *InverseSeq) miniGC() {
 
 	TERMLOOP:
 		for _, term := range r.terms[i].asserts {
-			if r.dupeMask.IsSet(i) {
-				if term.Timestamp >= zeroMatch {
-					dupe := dupeT{
-						Line:      term.Line,
-						Stream:    term.Stream,
-						Timestamp: term.Timestamp,
-					}
-					if _, ok := dupes[dupe]; !ok {
-						break TERMLOOP
-					}
+
+			switch {
+			case term.Timestamp < zeroMatch:
+			case r.dupeMask.IsSet(i):
+				dupe := dupeT{
+					Line:      term.Line,
+					Stream:    term.Stream,
+					Timestamp: term.Timestamp,
 				}
-			} else if term.Timestamp >= zeroMatch {
-				break
+				// If term is not a dupe, we can stop.
+				if _, ok := dupes[dupe]; !ok {
+					break TERMLOOP
+				}
+			default:
+				break TERMLOOP
 			}
 			cnt += 1
 		}
