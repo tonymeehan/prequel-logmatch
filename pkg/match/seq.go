@@ -18,29 +18,53 @@ import (
 // two events with the same timestamp when in real time they are sequential.
 
 type MatchSeq struct {
-	clock   int64
-	window  int64
-	nActive int
-	terms   []termT
+	clock    int64
+	window   int64
+	nActive  int
+	dupeMask bitMaskT
+	terms    []termT
 }
 
-func NewMatchSeq(window int64, terms ...string) (*MatchSeq, error) {
+func NewMatchSeq(window int64, terms ...TermT) (*MatchSeq, error) {
 	var (
-		nTerms = len(terms)
-		termL  = make([]termT, nTerms)
+		nTerms   = len(terms)
+		termL    = make([]termT, nTerms)
+		dupes    = make(map[TermT]int, nTerms)
+		dupeMask bitMaskT
 	)
 
+	if len(terms) == 0 {
+		return nil, ErrNoTerms
+	}
+
+	if len(terms) > 64 {
+		return nil, ErrTooManyTerms
+	}
+
+	// Calculate dupes
+	for _, term := range terms {
+		if v, ok := dupes[term]; ok {
+			dupes[term] = v + 1
+		} else {
+			dupes[term] = 1
+		}
+	}
+
 	for i, term := range terms {
-		if m, err := makeMatchFunc(term); err != nil {
+		if m, err := term.NewMatcher(); err != nil {
 			return nil, err
 		} else {
 			termL[i].matcher = m
 		}
+		if dupes[term] > 1 {
+			dupeMask.Set(i)
+		}
 	}
 
 	return &MatchSeq{
-		window: window,
-		terms:  termL,
+		window:   window,
+		terms:    termL,
+		dupeMask: dupeMask,
 	}, nil
 }
 
@@ -114,6 +138,7 @@ func (r *MatchSeq) GarbageCollect(clock int64) {
 
 	// Find the first term that is not older than the window.
 	for _, term := range m {
+
 		if term.Timestamp >= deadline {
 			break
 		}
@@ -134,21 +159,63 @@ func (r *MatchSeq) miniGC() {
 		return
 	}
 
+	type dupeT struct {
+		Line      string
+		Stream    string
+		Timestamp int64
+	}
+
 	var (
 		nActive   = 1
+		dupes     map[dupeT]struct{}
 		zeroMatch = r.terms[0].asserts[0].Timestamp
 	)
 
+	// Do not allocate if not processing dupes.
+	// Dupe detection  is used to prune duplicate terms
+	// that are incorrectly activated due to garbage collection.
+	if !r.dupeMask.Zeros() {
+		dupes = make(map[dupeT]struct{}, len(r.terms))
+		if r.dupeMask.IsSet(0) {
+			term := r.terms[0].asserts[0]
+			dupes[dupeT{
+				Line:      term.Line,
+				Stream:    term.Stream,
+				Timestamp: term.Timestamp,
+			}] = struct{}{}
+		}
+	}
+
 	// For remaining active terms, find the first term that is not older than the window.
+	forceClear := false
 	for i := 1; i < r.nActive; i++ {
+
+		if forceClear {
+			resetTerm(r.terms, i)
+			continue
+		}
 
 		var (
 			cnt int
 			m   = r.terms[i].asserts
 		)
+	TERMLOOP:
 		for _, term := range m {
-			if term.Timestamp >= zeroMatch {
-				break
+
+			switch {
+			case term.Timestamp < zeroMatch:
+			case r.dupeMask.IsSet(i):
+				dupe := dupeT{
+					Line:      term.Line,
+					Stream:    term.Stream,
+					Timestamp: term.Timestamp,
+				}
+				// If term is not a dupe, we can stop.
+				if _, ok := dupes[dupe]; !ok {
+					break TERMLOOP
+				}
+			default:
+				break TERMLOOP
 			}
 			cnt += 1
 		}
@@ -159,6 +226,17 @@ func (r *MatchSeq) miniGC() {
 
 		if len(r.terms[i].asserts) > 0 {
 			nActive++
+
+			if r.dupeMask.IsSet(i) {
+				term := r.terms[i].asserts[0]
+				dupes[dupeT{
+					Line:      term.Line,
+					Stream:    term.Stream,
+					Timestamp: term.Timestamp,
+				}] = struct{}{}
+			}
+		} else {
+			forceClear = true
 		}
 	}
 

@@ -19,7 +19,7 @@ type InverseSet struct {
 	resets  []resetT
 }
 
-func NewInverseSet(window int64, setTerms []string, resetTerms []ResetT) (*InverseSet, error) {
+func NewInverseSet(window int64, setTerms []TermT, resetTerms []ResetT) (*InverseSet, error) {
 
 	if len(setTerms) > 64 {
 		return nil, ErrTooManyTerms
@@ -30,22 +30,27 @@ func NewInverseSet(window int64, setTerms []string, resetTerms []ResetT) (*Inver
 
 	var (
 		resets []resetT
+		dupes  = make(map[TermT]struct{})
 		terms  = make([]termT, 0, len(setTerms))
 	)
 
 	for _, term := range setTerms {
-		m, err := makeMatchFunc(term)
+		m, err := term.NewMatcher()
 		if err != nil {
 			return nil, err
 		}
 		terms = append(terms, termT{matcher: m})
+		if _, ok := dupes[term]; ok {
+			return nil, ErrDuplicateTerm
+		}
+		dupes[term] = struct{}{}
 	}
 
 	if len(resetTerms) > 0 {
 		resets = make([]resetT, 0, len(resetTerms))
 
 		for _, term := range resetTerms {
-			m, err := makeMatchFunc(term.Term)
+			m, err := term.Term.NewMatcher()
 			switch {
 			case err != nil:
 				return nil, err

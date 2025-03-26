@@ -6,7 +6,12 @@ import (
 
 func TestMatchJson(t *testing.T) {
 
-	m, err := makeMatchFunc("jq_json:.shrubbery")
+	tt := TermT{
+		Type:  TermJqJson,
+		Value: `select(.shrubbery == "apple")`,
+	}
+
+	m, err := tt.NewMatcher()
 	if err != nil {
 		t.Fatalf("Expected nil error, got: %v", err)
 	}
@@ -23,8 +28,12 @@ func TestMatchJson(t *testing.T) {
 }
 
 func TestMatchJsonString(t *testing.T) {
+	tt := TermT{
+		Type:  TermJqJson,
+		Value: `select(.shrubbery == "apple")`,
+	}
 
-	m, err := makeMatchFunc(`jq_json:select(.shrubbery == "apple")`)
+	m, err := tt.NewMatcher()
 	if err != nil {
 		t.Fatalf("Expected nil error, got: %v", err)
 	}
@@ -42,8 +51,12 @@ func TestMatchJsonString(t *testing.T) {
 }
 
 func TestMatchJsonRegex(t *testing.T) {
+	tt := TermT{
+		Type:  TermJqJson,
+		Value: `.shrubbery | test("^a.")`,
+	}
 
-	m, err := makeMatchFunc(`jq_json:.shrubbery | test("^a.")`)
+	m, err := tt.NewMatcher()
 	if err != nil {
 		t.Fatalf("Expected nil error, got: %v", err)
 	}
@@ -64,8 +77,12 @@ func TestMatchJsonRegex(t *testing.T) {
 }
 
 func TestMatchYaml(t *testing.T) {
+	tt := TermT{
+		Type:  TermJqYaml,
+		Value: `.shrubbery`,
+	}
 
-	m, err := makeMatchFunc("jq_yaml:.shrubbery")
+	m, err := tt.NewMatcher()
 	if err != nil {
 		t.Fatalf("Expected nil error, got: %v", err)
 	}
@@ -109,10 +126,24 @@ var jsonData = `
 } `
 
 func BenchmarkMatchJson(b *testing.B) {
+	var (
+		tt1 = TermT{
+			Type:  TermJqJson,
+			Value: `.widget.window.name`,
+		}
+		tt2 = TermT{
+			Type:  TermJqJson,
+			Value: `.widget.image.hOffset`,
+		}
+		tt3 = TermT{
+			Type:  TermJqJson,
+			Value: `.widget.text.onMouseUp`,
+		}
 
-	m1, _ := makeMatchFunc("jq_json:.widget.window.name")
-	m2, _ := makeMatchFunc("jq_json:.widget.image.hOffset")
-	m3, _ := makeMatchFunc("jq_json:.widget.text.onMouseUp")
+		m1, _ = tt1.NewMatcher()
+		m2, _ = tt2.NewMatcher()
+		m3, _ = tt3.NewMatcher()
+	)
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {

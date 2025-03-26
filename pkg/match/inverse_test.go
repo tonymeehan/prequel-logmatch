@@ -152,3 +152,18 @@ func garbageCollect[T Matcher](clock int64) func(*testing.T, int, T) {
 		sm.GarbageCollect(clock)
 	}
 }
+
+func makeTerms(terms []string) []TermT {
+	out := make([]TermT, 0, len(terms))
+	for _, term := range terms {
+		out = append(out, TermT{Type: TermRaw, Value: term})
+	}
+	return out
+}
+func makeTermsA(terms ...string) []TermT {
+	return makeTerms(terms)
+}
+
+func makeRaw(term string) TermT {
+	return TermT{Type: TermRaw, Value: term}
+}

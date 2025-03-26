@@ -1,21 +1,24 @@
 package match
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
-	ErrNoTerms      = errors.New("no terms")
-	ErrTooManyTerms = errors.New("too many terms")
-	ErrAnchorRange  = errors.New("anchor out of range")
+	ErrNoTerms       = errors.New("no terms")
+	ErrTooManyTerms  = errors.New("too many terms")
+	ErrAnchorRange   = errors.New("anchor out of range")
+	ErrDuplicateTerm = errors.New("duplicate term")
 )
 
 var capThreshold = 4
 
 type ResetT struct {
-	Term     string // Inverse term
-	Window   int64  // Window size; defaults to 0 which in combination with !Absolute means the window is the range of the matched sequence.
-	Slide    int64  // Slide the anchor, +/- relative to the anchor term
-	Anchor   uint8  // Anchor term; defaults to first event in match sequence
-	Absolute bool   // Absolute window time or relative to the range of the matched sequence.
+	Term     TermT // Inverse term
+	Window   int64 // Window size; defaults to 0 which in combination with !Absolute means the window is the range of the matched sequence.
+	Slide    int64 // Slide the anchor, +/- relative to the anchor term
+	Anchor   uint8 // Anchor term; defaults to first event in match sequence
+	Absolute bool  // Absolute window time or relative to the range of the matched sequence.
 }
 
 type resetT struct {

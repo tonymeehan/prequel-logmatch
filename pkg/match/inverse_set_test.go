@@ -8,24 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func TestSetInverseBadAnchor(t *testing.T) {
-	var (
-		window int64 = 10
-
-		resets = []ResetT{
-			{
-				Term:   "Shutdown initiated",
-				Anchor: 11, // Bad anchor
-			},
-		}
-	)
-
-	_, err := NewInverseSet(window, []string{"alpha", "beta"}, resets)
-	if err != ErrAnchorRange {
-		t.Fatalf("Expected err == ErrAnchorRange, got %v", err)
-	}
-}
-
 func TestSetInverse(t *testing.T) {
 	type step = stepT[InverseSet]
 
@@ -52,7 +34,7 @@ func TestSetInverse(t *testing.T) {
 			reset: []ResetT{
 				{
 					Window: 10,
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 				},
 			},
 			steps: []step{
@@ -69,7 +51,7 @@ func TestSetInverse(t *testing.T) {
 			reset: []ResetT{
 				{
 					Window: 10,
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 				},
 			},
 			steps: []step{
@@ -86,7 +68,7 @@ func TestSetInverse(t *testing.T) {
 			window: 10,
 			terms:  []string{"alpha"},
 			reset: []ResetT{{
-				Term: "reset",
+				Term: makeRaw("reset"),
 			}}, // Simple relative reset
 			steps: []step{
 				{line: "alpha", stamp: 1},
@@ -151,7 +133,7 @@ func TestSetInverse(t *testing.T) {
 			window: 10,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{{
-				Term: "reset",
+				Term: makeRaw("reset"),
 			}}, // Simple relative reset
 			steps: []step{
 				{line: "alpha", stamp: 1},
@@ -170,7 +152,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "Shutdown initiated",
+					Term:     makeRaw("Shutdown initiated"),
 					Window:   20,
 					Absolute: true,
 				},
@@ -193,7 +175,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Slide:    -5,
 					Window:   5,
 					Absolute: true,
@@ -217,7 +199,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Slide:    20,
 					Window:   15,
 					Absolute: true,
@@ -244,7 +226,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta", "gamma"},
 			reset: []ResetT{
 				{
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 					Window: 10,
 				},
 			},
@@ -262,7 +244,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   60,
 					Absolute: true,
 					Anchor:   1, // Anchor on beta
@@ -282,7 +264,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   60,
 					Absolute: true,
 					Anchor:   1, // Anchor on beta
@@ -303,7 +285,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   60,
 					Absolute: true,
 					Anchor:   1, // Anchor on beta
@@ -324,7 +306,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   60,
 					Absolute: true,
 					Anchor:   1, // Anchor on beta
@@ -351,7 +333,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta", "gamma"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   5,
 					Absolute: true,
 					Anchor:   2,
@@ -379,8 +361,8 @@ func TestSetInverse(t *testing.T) {
 			window: 50,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 			},
 			steps: []step{
 				{line: "Match alpha."},
@@ -408,10 +390,10 @@ func TestSetInverse(t *testing.T) {
 			window: 50,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 				{
-					Term:     "reset3",
+					Term:     makeRaw("reset3"),
 					Absolute: true,
 					Window:   1000,
 				},
@@ -436,10 +418,10 @@ func TestSetInverse(t *testing.T) {
 			window: 50,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 				{
-					Term:     "reset3",
+					Term:     makeRaw("reset3"),
 					Absolute: true,
 					Window:   1000,
 				},
@@ -463,10 +445,10 @@ func TestSetInverse(t *testing.T) {
 			window: 10,
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
-				{Term: "reset1"},
-				{Term: "reset2"},
+				{Term: makeRaw("reset1")},
+				{Term: makeRaw("reset2")},
 				{
-					Term:     "reset3",
+					Term:     makeRaw("reset3"),
 					Absolute: false,
 					Window:   30,
 				},
@@ -514,7 +496,7 @@ func TestSetInverse(t *testing.T) {
 			window: 10,
 			terms:  []string{"alpha", "beta", "gamma"},
 			reset: []ResetT{
-				{Term: "reset"},
+				{Term: makeRaw("reset")},
 			},
 			steps: []step{
 				{line: "reset"},
@@ -534,7 +516,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:   "reset",
+					Term:   makeRaw("reset"),
 					Slide:  -10,
 					Window: 20,
 				},
@@ -570,7 +552,7 @@ func TestSetInverse(t *testing.T) {
 			terms:  []string{"alpha", "beta"},
 			reset: []ResetT{
 				{
-					Term:     "reset",
+					Term:     makeRaw("reset"),
 					Window:   50,
 					Absolute: true,
 				},
@@ -585,7 +567,7 @@ func TestSetInverse(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			sm, err := NewInverseSet(tc.window, tc.terms, tc.reset)
+			sm, err := NewInverseSet(tc.window, makeTerms(tc.terms), tc.reset)
 			if err != nil {
 				t.Fatalf("Expected err == nil, got %v", err)
 			}
@@ -622,10 +604,37 @@ func TestSetInverse(t *testing.T) {
 	}
 }
 
+func TestSetInverseBadAnchor(t *testing.T) {
+	var (
+		window int64 = 10
+
+		resets = []ResetT{
+			{
+				Term:   makeRaw("Shutdown initiated"),
+				Anchor: 11, // Bad anchor
+			},
+		}
+	)
+
+	_, err := NewInverseSet(window, makeTermsA("alpha", "beta"), resets)
+	if err != ErrAnchorRange {
+		t.Fatalf("Expected err == ErrAnchorRange, got %v", err)
+	}
+}
+
+// Dupes not yet implemented.
+func TestSetInverseDupes(t *testing.T) {
+
+	_, err := NewInverseSet(10, makeTermsA("alpha", "alpha"), nil)
+	if err != ErrDuplicateTerm {
+		t.Fatalf("Expected err == ErrDuplicateTerm, got %v", err)
+	}
+}
+
 // --------------------
 
 func BenchmarkSetInverseMisses(b *testing.B) {
-	sm, err := NewInverseSet(int64(time.Second), []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSet(int64(time.Second), makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -643,13 +652,13 @@ func BenchmarkSetInverseMissesWithReset(b *testing.B) {
 
 	resets := []ResetT{
 		{
-			Term:     "badterm",
+			Term:     makeRaw("badterm"),
 			Window:   1000,
 			Absolute: true,
 		},
 	}
 
-	sm, err := NewInverseSet(int64(time.Second), []string{"frank", "burns"}, resets)
+	sm, err := NewInverseSet(int64(time.Second), makeTermsA("frank", "burns"), resets)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -668,7 +677,7 @@ func BenchmarkSetInverseHitSequence(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	defer zerolog.SetGlobalLevel(level)
 
-	sm, err := NewInverseSet(int64(time.Second), []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSet(int64(time.Second), makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -695,7 +704,7 @@ func BenchmarkSetInverseHitOverlap(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	defer zerolog.SetGlobalLevel(level)
 
-	sm, err := NewInverseSet(10, []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSet(10, makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}
@@ -731,7 +740,7 @@ func BenchmarkSetInverseRunawayMatch(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	defer zerolog.SetGlobalLevel(level)
 
-	sm, err := NewInverseSet(1000000, []string{"frank", "burns"}, nil)
+	sm, err := NewInverseSet(1000000, makeTermsA("frank", "burns"), nil)
 	if err != nil {
 		b.Fatalf("Expected err == nil, got %v", err)
 	}

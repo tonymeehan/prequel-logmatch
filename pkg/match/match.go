@@ -14,7 +14,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var ErrEmptyTerm = errors.New("empty term")
+var (
+	ErrTermType    = errors.New("unknown term type")
+	ErrTermEmpty   = errors.New("empty term")
+	ErrTermCompile = errors.New("term compile error")
+)
 
 type Matcher interface {
 	Eval(int64) Hits
@@ -23,6 +27,62 @@ type Matcher interface {
 }
 
 type LogEntry = entry.LogEntry
+
+type TermTypeT int
+
+const (
+	TermRaw TermTypeT = iota
+	TermRegex
+	TermJqJson
+	TermJqYaml
+)
+
+func (t TermTypeT) String() string {
+	switch t {
+	case TermRaw:
+		return "raw"
+	case TermJqJson:
+		return "jqJson"
+	case TermJqYaml:
+		return "jqYaml"
+	case TermRegex:
+		return "regex"
+	default:
+		return "unknown"
+	}
+}
+
+type TermT struct {
+	Type  TermTypeT
+	Value string
+}
+
+type MatchFunc func(string) bool
+
+func (tt TermT) NewMatcher() (m MatchFunc, err error) {
+
+	if tt.Value == "" {
+		err = ErrTermEmpty
+		return
+	}
+
+	switch tt.Type {
+	case TermJqJson, TermJqYaml:
+		if m, err = makeJqMatch(tt); err != nil {
+			err = fmt.Errorf("%w type:'%s' value:'%s': %w", ErrTermCompile, tt.Type.String(), tt.Value, err)
+		}
+	case TermRegex:
+		if m, err = makeRegexMatch(tt.Value); err != nil {
+			err = fmt.Errorf("%w type:'%s' value:'%s': %w", ErrTermCompile, tt.Type.String(), tt.Value, err)
+		}
+	case TermRaw:
+		m = makeRawMatch(tt.Value)
+	default:
+		err = ErrTermType
+	}
+
+	return
+}
 
 type Hits struct {
 	Cnt  int
@@ -60,29 +120,7 @@ func (h Hits) Index(i int) []LogEntry {
 	return h.Logs[off : off+sz]
 }
 
-type MatchFunc func(string) bool
-
-func makeMatchFunc(s string) (m MatchFunc, err error) {
-
-	switch {
-	case s == "":
-		err = ErrEmptyTerm
-	case strings.HasPrefix(s, "jq_"):
-		if m, err = makeJqMatch(s); err != nil {
-			err = fmt.Errorf("fail jq compile '%s': %w", s, err)
-		}
-	case isRegex(s):
-		if m, err = makeRegexMatch(s); err != nil {
-			err = fmt.Errorf("fail regex compile '%s': %w", s, err)
-		}
-	default:
-		m = makeRawMatch(s)
-	}
-
-	return
-}
-
-func isRegex(v string) bool {
+func IsRegex(v string) bool {
 	return regexp.QuoteMeta(v) != v
 }
 
@@ -159,21 +197,19 @@ func NewJqJson(term string) (MatchFunc, error) {
 	return _makeJqMatch(term, code, unmarshal), nil
 }
 
-func makeJqMatch(term string) (MatchFunc, error) {
+func makeJqMatch(term TermT) (MatchFunc, error) {
 	var unmarshal unmarshalFuncT
 
-	switch {
-	case strings.HasPrefix(term, "jq_json:"):
+	switch term.Type {
+	case TermJqJson:
 		unmarshal = makeJsonUnmarshal()
-	case strings.HasPrefix(term, "jq_yaml:"):
+	case TermJqYaml:
 		unmarshal = makeYamlUnmarshal()
 	default:
 		return nil, errors.New("unknown jq format")
 	}
 
-	term = term[8:]
-
-	query, err := gojq.Parse(term)
+	query, err := gojq.Parse(term.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +219,7 @@ func makeJqMatch(term string) (MatchFunc, error) {
 		return nil, err
 	}
 
-	return _makeJqMatch(term, code, unmarshal), nil
+	return _makeJqMatch(term.Value, code, unmarshal), nil
 }
 
 type unmarshalFuncT func(string) (any, error)
