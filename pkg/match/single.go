@@ -26,3 +26,10 @@ func (r *MatchSingle) Scan(e entry.LogEntry) (hits Hits) {
 
 	return
 }
+
+func (r *MatchSingle) Eval(clock int64) (hits Hits) {
+	return
+}
+
+func (r *MatchSingle) GarbageCollect(clock int64) {
+}
