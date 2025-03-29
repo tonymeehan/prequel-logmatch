@@ -39,16 +39,35 @@ func defaultErrFunc(line []byte, err error) error {
 	return nil
 }
 
+func foldErrFunc(line []byte, err error) error {
+	// Tolerate badly formed lines
+	log.Trace().
+		Err(err).
+		Str("line", string(line)).
+		Msg("Fail line parse; appended to pending")
+	return nil
+}
+
 func parseOpts(opts []ScanOptT) scanOpt {
 	o := scanOpt{
 		maxSz: MaxRecordSize,
-		errF:  defaultErrFunc,
 		stop:  math.MaxInt64, // Default to scan to end of file; fixup for reverse scan since less common
 	}
 
 	for _, opt := range opts {
 		opt(&o)
 	}
+
+	switch {
+	case o.errF != nil:
+		// User specified error function; continue.
+	case o.fold:
+		// defaultErrFunc is too verbose for folded scans.
+		o.errF = foldErrFunc
+	default:
+		o.errF = defaultErrFunc
+	}
+
 	return o
 }
 
