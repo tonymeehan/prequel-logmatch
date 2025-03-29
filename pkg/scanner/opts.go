@@ -23,6 +23,7 @@ type ScanOptT func(*scanOpt)
 
 type scanOpt struct {
 	maxSz int
+	fold  bool
 	start int64
 	stop  int64
 	mark  int64
@@ -49,6 +50,12 @@ func parseOpts(opts []ScanOptT) scanOpt {
 		opt(&o)
 	}
 	return o
+}
+
+func WithFold(fold bool) ScanOptT {
+	return func(o *scanOpt) {
+		o.fold = fold
+	}
 }
 
 func WithMaxSize(maxSz int) ScanOptT {
