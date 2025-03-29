@@ -3,6 +3,7 @@ package scanner
 import (
 	"bufio"
 	"io"
+	"strings"
 
 	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
 )
@@ -63,25 +64,42 @@ func bindCallbacks(scanF ScanFuncT, o scanOpt) (ScanFuncT, ErrFuncT, flushFuncT)
 		return scanF, o.errF, nil
 	}
 
-	var pending LogEntry
+	var (
+		pending LogEntry
+		builder strings.Builder
+	)
 
-	nScanF := func(entry LogEntry) bool {
+	nScanF := func(entry LogEntry) (done bool) {
 		// Cache on first spin
 		if pending.Timestamp == 0 {
 			pending = entry
-			return false
+			return
 		}
 
-		done := scanF(pending)
+		if builder.Len() > 0 {
+			pending.Line = builder.String()
+			builder.Reset()
+		}
+
+		// Scan pending entry
+		done = scanF(pending)
+
+		// Promote current entry to pending
 		pending = entry
-		return done
+
+		return
 	}
 
+	// On error, append line to pending entry
 	nErrF := func(line []byte, err error) error {
-		pending.Line += string(line)
+		if builder.Len() == 0 {
+			builder.WriteString(pending.Line)
+		}
+		builder.Write(line)
 		return o.errF(line, err)
 	}
 
+	// On final flush, emit pending entry if exists
 	flushF := func() {
 		if pending.Timestamp != 0 {
 			scanF(pending)
