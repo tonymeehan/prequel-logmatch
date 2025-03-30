@@ -10,7 +10,7 @@ import (
 
 func TestRegex(t *testing.T) {
 
-	exp := `^\b[A-Z][a-z]{2} [A-Z][a-z]{2} [ _]?\d{1,2} \d{2}:\d{2}:\d{2} \d{4}\b`
+	exp := `^((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s\d{2}:\d{2}:\d{2}\s\d{4}) `
 	factory, err := NewRegexFactory(exp, WithTimeFormat(time.ANSIC))
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)

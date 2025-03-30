@@ -2,16 +2,11 @@ package format
 
 import (
 	"bufio"
-	"errors"
 	"io"
 	"regexp"
 	"time"
 
 	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
-)
-
-var (
-	ErrNoMatch = errors.New("expected at least one match")
 )
 
 type TimeFormatCbT func(m []byte) (int64, error)
@@ -37,7 +32,7 @@ func WithTimeFormat(fmtTime string) TimeFormatCbT {
 			return 0, err
 		}
 
-		return t.UnixNano(), nil
+		return t.UTC().UnixNano(), nil
 	}
 }
 
@@ -85,7 +80,7 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 	if scanner.Scan() {
 		m := f.expTime.FindSubmatch(scanner.Bytes())
 		if len(m) <= 1 {
-			err = ErrNoTimestamp
+			err = ErrMatchTimestamp
 			return
 		}
 
@@ -102,7 +97,7 @@ func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 func (f *regexFmtT) ReadEntry(data []byte) (entry LogEntry, err error) {
 	m := f.expTime.FindSubmatch(data)
 	if len(m) <= 1 {
-		err = ErrNoTimestamp
+		err = ErrMatchTimestamp
 		return
 	}
 

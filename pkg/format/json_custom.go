@@ -9,8 +9,6 @@ import (
 	"github.com/goccy/go-json"
 )
 
-var ErrJsonTimeField = errors.New("fail to extract time field")
-
 type jsonCustomFmtT struct {
 	path    *json.Path
 	fmtTime string
@@ -75,7 +73,7 @@ func (f *jsonCustomFmtT) parseTime(stime string) (ts int64, err error) {
 		return
 	}
 
-	return t.UnixNano(), nil
+	return t.UTC().UnixNano(), nil
 }
 
 // Read custom JSON Format
