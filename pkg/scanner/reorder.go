@@ -24,7 +24,7 @@ var (
 	ErrInvalidCallback = errors.New("invalid callback")
 )
 
-type reorderT struct {
+type ReorderT struct {
 	cb     ScanFuncT
 	window int64
 	clock  int64
@@ -37,7 +37,7 @@ type reorderT struct {
 // entires will not be delivered to 'cb' until they shift
 // outside the window.
 
-func NewReorder(window int64, cb ScanFuncT) (*reorderT, error) {
+func NewReorder(window int64, cb ScanFuncT) (*ReorderT, error) {
 	if window <= 0 {
 		return nil, ErrInvalidWindow
 	}
@@ -45,7 +45,7 @@ func NewReorder(window int64, cb ScanFuncT) (*reorderT, error) {
 		return nil, ErrInvalidCallback
 	}
 
-	return &reorderT{
+	return &ReorderT{
 		cb:     cb,
 		window: window,
 		inList: newRList(),
@@ -53,7 +53,7 @@ func NewReorder(window int64, cb ScanFuncT) (*reorderT, error) {
 	}, nil
 }
 
-func (r *reorderT) Append(entry LogEntry) bool {
+func (r *ReorderT) Append(entry LogEntry) bool {
 
 	// Check entry is out of order
 	if entry.Timestamp < r.clock {
@@ -67,7 +67,7 @@ func (r *reorderT) Append(entry LogEntry) bool {
 	return r._flush()
 }
 
-func (r *reorderT) _flush() bool {
+func (r *ReorderT) _flush() bool {
 	ooHead := r.ooList.front()
 	if ooHead == nil {
 		return r.fastPath()
@@ -75,7 +75,7 @@ func (r *reorderT) _flush() bool {
 	return r.slowPath(ooHead.entry.Timestamp)
 }
 
-func (r *reorderT) slowPath(ooTimestamp int64) bool {
+func (r *ReorderT) slowPath(ooTimestamp int64) bool {
 
 	var (
 		deadline = r.clock - r.window
@@ -142,7 +142,7 @@ func (r *reorderT) slowPath(ooTimestamp int64) bool {
 	return false
 }
 
-func (r *reorderT) AdvanceClock(stamp int64) bool {
+func (r *ReorderT) AdvanceClock(stamp int64) bool {
 	if stamp < r.clock {
 		log.Info().
 			Int64("clock", r.clock).
@@ -154,13 +154,13 @@ func (r *reorderT) AdvanceClock(stamp int64) bool {
 	return r._flush()
 }
 
-func (r *reorderT) Flush() (done bool) {
+func (r *ReorderT) Flush() (done bool) {
 	done = r.AdvanceClock(math.MaxInt64)
 	r.drain()
 	return done
 }
 
-func (r *reorderT) fastPath() bool {
+func (r *ReorderT) fastPath() bool {
 
 	deadline := r.clock - r.window
 	for head := r.inList.front(); head != nil; head = r.inList.front() {
@@ -184,7 +184,7 @@ func (r *reorderT) fastPath() bool {
 // This is linear, but given how the data typically arrives,
 // it is unlikely to be a problem.  Could use a tree structure
 // if inserts become expensive.
-func (r *reorderT) queueOutofOrder(entry LogEntry) {
+func (r *ReorderT) queueOutofOrder(entry LogEntry) {
 	deadline := r.clock - r.window
 	if entry.Timestamp < deadline {
 		log.Debug().
@@ -209,7 +209,7 @@ func (r *reorderT) queueOutofOrder(entry LogEntry) {
 	}
 }
 
-func (r *reorderT) drain() {
+func (r *ReorderT) drain() {
 	r.ooList.free()
 	r.inList.free()
 	r.clock = 0
