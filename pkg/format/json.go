@@ -2,14 +2,11 @@ package format
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
 	"github.com/goccy/go-json"
 )
-
-var ErrJsonUnmarshal = fmt.Errorf("fail JSON unmarshal")
 
 func NewJsonFactory() FactoryI {
 	return &jsonFactoryT{}
@@ -48,7 +45,7 @@ func (f *jsonFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
 		return
 	}
 
-	return line.Time.UnixNano(), nil
+	return line.Time.UTC().UnixNano(), nil
 }
 
 // Read Docker JSON format

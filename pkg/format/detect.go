@@ -18,8 +18,6 @@ type ParserI interface {
 	ReadEntry(line []byte) (LogEntry, error)
 }
 
-var ErrFormatDetect = errors.New("fail to detect log format")
-
 type DetectFormatFunc func(line []byte) (FactoryI, int64, error)
 
 var supportedFormats = []DetectFormatFunc{

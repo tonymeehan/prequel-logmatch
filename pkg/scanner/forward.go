@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/prequel-dev/prequel-logmatch/internal/pkg/pool"
+	"github.com/prequel-dev/prequel-logmatch/pkg/format"
 )
 
 func ScanForward(rdr io.Reader, parseF ParseFuncT, scanF ScanFuncT, opts ...ScanOptT) error {
@@ -92,10 +93,12 @@ func bindCallbacks(scanF ScanFuncT, o scanOpt) (ScanFuncT, ErrFuncT, flushFuncT)
 
 	// On error, append line to pending entry
 	nErrF := func(line []byte, err error) error {
-		if builder.Len() == 0 {
-			builder.WriteString(pending.Line)
+		if err == format.ErrMatchTimestamp {
+			if builder.Len() == 0 {
+				builder.WriteString(pending.Line)
+			}
+			builder.Write(line)
 		}
-		builder.Write(line)
 		return o.errF(line, err)
 	}
 

@@ -20,12 +20,6 @@ const (
 )
 
 var (
-	ErrNoTimestamp   = errors.New("no timestamp delimeter")
-	ErrNoStreamType  = errors.New("no stream delimeter")
-	ErrNoTag         = errors.New("no tag delimeter")
-	ErrUnknownStream = errors.New("unknown stream type")
-	ErrParseTimesamp = errors.New("fail parse timestamp")
-
 	sliceStdout = []byte(tokenStdout)
 	sliceStderr = []byte(tokenStderr)
 )

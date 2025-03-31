@@ -1,12 +1,13 @@
-package format
+package scanner
 
 import (
 	"bufio"
 	"math"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/prequel-dev/prequel-logmatch/pkg/scanner"
+	"github.com/prequel-dev/prequel-logmatch/pkg/format"
 )
 
 // Actual corrupted data
@@ -26,15 +27,75 @@ const extra = `
 {"log":"[INFO] 10.244.0.201:52267 - 22828 \"AAAA IN prequel-collector-service.prequel.svc.cluster.local. udp 80 false 1232\" NOERROR qr,aa,rd 162 0.000566709s\n","stream":"stdout","time":"2024-02-13T15:26:09.858265371Z"}
 `
 
-func TestJsonLogsCorrupt(t *testing.T) {
+func TestJsonCustomCorrupt(t *testing.T) {
 	var (
-		f     = jsonFmtT{}
 		maxSz = 1024 * 1024
-		sr    = scanner.NewStdReadScan(maxSz)
+		sr    = NewStdReadScan(maxSz)
 		rdr   = strings.NewReader(corrupted)
 	)
 
-	err := scanner.ScanForward(rdr, f.ReadEntry, sr.Scan, scanner.WithMaxSize(maxSz))
+	factory, err := format.NewJsonCustomFactory("$.time", time.RFC3339Nano)
+	if err != nil {
+		t.Errorf("Expected nil error got %v", err)
+	}
+
+	f := factory.New()
+
+	err = ScanForward(rdr, f.ReadEntry, sr.Scan, WithMaxSize(maxSz))
+
+	if err != nil {
+		t.Errorf("Expected nil error got %v", err)
+	}
+
+	if len(sr.Logs) != 6 {
+		t.Errorf("Expected %d entries, got %d", 6, len(sr.Logs))
+	}
+
+	if sr.Clip {
+		t.Errorf("Expected no clip")
+	}
+}
+
+func TestJsonCustomLogsExtraLF(t *testing.T) {
+
+	var (
+		maxSz = 1024 * 1024
+		sr    = NewStdReadScan(maxSz)
+		rdr   = strings.NewReader("\n\n\n" + corrupted + "\n\n\n" + extra + "\n\n")
+	)
+
+	factory, err := format.NewJsonCustomFactory("$.time", time.RFC3339Nano)
+	if err != nil {
+		t.Errorf("Expected nil error got %v", err)
+	}
+
+	f := factory.New()
+
+	err = ScanForward(rdr, f.ReadEntry, sr.Scan, WithMaxSize(maxSz))
+
+	if err != nil {
+		t.Errorf("Expected nil error got %v", err)
+	}
+
+	if len(sr.Logs) != 8 {
+		t.Errorf("Expected %d entries, got %d", 8, len(sr.Logs))
+	}
+
+	if sr.Clip {
+		t.Errorf("Expected no clip")
+	}
+}
+
+func TestJsonLogsCorrupt(t *testing.T) {
+	var (
+		factory = format.NewJsonFactory()
+		f       = factory.New()
+		maxSz   = 1024 * 1024
+		sr      = NewStdReadScan(maxSz)
+		rdr     = strings.NewReader(corrupted)
+	)
+
+	err := ScanForward(rdr, f.ReadEntry, sr.Scan, WithMaxSize(maxSz))
 
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)
@@ -52,13 +113,14 @@ func TestJsonLogsCorrupt(t *testing.T) {
 func TestJsonLogsExtraLF(t *testing.T) {
 
 	var (
-		f     = jsonFmtT{}
-		maxSz = 1024 * 1024
-		sr    = scanner.NewStdReadScan(maxSz)
-		rdr   = strings.NewReader("\n\n\n" + corrupted + "\n\n\n" + extra + "\n\n")
+		factory = format.NewJsonFactory()
+		f       = factory.New()
+		maxSz   = 1024 * 1024
+		sr      = NewStdReadScan(maxSz)
+		rdr     = strings.NewReader("\n\n\n" + corrupted + "\n\n\n" + extra + "\n\n")
 	)
 
-	err := scanner.ScanForward(rdr, f.ReadEntry, sr.Scan, scanner.WithMaxSize(maxSz))
+	err := ScanForward(rdr, f.ReadEntry, sr.Scan, WithMaxSize(maxSz))
 
 	if err != nil {
 		t.Errorf("Expected nil error got %v", err)
@@ -94,18 +156,19 @@ func TestJsonLogsMaxSize(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			f := jsonFmtT{}
+			factory := format.NewJsonFactory()
+			f := factory.New()
 
 			stop := tc.stop
 			if stop == 0 {
 				stop = math.MaxInt64
 			}
 
-			sr := scanner.NewStdReadScan(tc.maxSz)
+			sr := NewStdReadScan(tc.maxSz)
 
 			rdr := strings.NewReader(corrupted)
 
-			err := scanner.ScanForward(rdr, f.ReadEntry, sr.Scan, scanner.WithMaxSize(tc.maxSz), scanner.WithStop(stop))
+			err := ScanForward(rdr, f.ReadEntry, sr.Scan, WithMaxSize(tc.maxSz), WithStop(stop))
 
 			if err != tc.wantErr {
 				t.Errorf("Expected %v error got %v", tc.wantErr, err)
