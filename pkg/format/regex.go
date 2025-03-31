@@ -59,7 +59,7 @@ func (f *regexFactoryT) New() ParserI {
 }
 
 func (f *regexFactoryT) String() string {
-	return "regex"
+	return FactoryRegex
 }
 
 func (f *regexFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {

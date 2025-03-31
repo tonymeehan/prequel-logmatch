@@ -27,6 +27,14 @@ var supportedFormats = []DetectFormatFunc{
 }
 
 const (
+	FactoryJSON       = "json"
+	FactoryRegex      = "regex"
+	FactoryRfc339Nano = "rfc339Nano"
+	FactoryJSONCustom = "json_custom"
+	FactoryCRI        = "cri"
+)
+
+const (
 	DefBufferSize = 4 << 10 // 4K
 	MaxRecordSize = pool.MaxRecordSize
 )

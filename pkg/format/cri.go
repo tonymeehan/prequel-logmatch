@@ -35,7 +35,7 @@ func (f *criFactoryT) New() ParserI {
 }
 
 func (f *criFactoryT) String() string {
-	return "cri"
+	return FactoryCRI
 }
 
 func (f *criFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {

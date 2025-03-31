@@ -43,7 +43,7 @@ func (f *jsonCustomFactoryT) New() ParserI {
 }
 
 func (f *jsonCustomFactoryT) String() string {
-	return "json_custom"
+	return FactoryJSONCustom
 }
 
 func (f *jsonCustomFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {

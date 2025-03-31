@@ -29,7 +29,7 @@ func (f *jsonFactoryT) New() ParserI {
 }
 
 func (f *jsonFactoryT) String() string {
-	return "json"
+	return FactoryJSON
 }
 
 func (f *jsonFmtT) ReadTimestamp(rdr io.Reader) (ts int64, err error) {
