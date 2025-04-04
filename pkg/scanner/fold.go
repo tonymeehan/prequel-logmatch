@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/prequel-dev/prequel-logmatch/pkg/format"
@@ -40,7 +41,7 @@ func bindFold(scanF ScanFuncT, errF ErrFuncT) (ScanFuncT, ErrFuncT, flushFuncT) 
 
 	// On error, append line to pending entry
 	nErrF := func(line []byte, err error) error {
-		if err == format.ErrMatchTimestamp {
+		if errors.Is(err, format.ErrMatchTimestamp) {
 			if builder.Len() == 0 {
 				builder.WriteString(pending.Line)
 			}
