@@ -1,4 +1,4 @@
-module github.com/prequel-dev/prequel-logmatch
+module github.com/tonymeehan/prequel-logmatch
 
 go 1.23.3
 
