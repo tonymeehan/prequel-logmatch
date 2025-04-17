@@ -47,7 +47,7 @@ LOOP:
 			continue
 		}
 
-		if entry.Timestamp < o.stop {
+		if entry.Timestamp < stop {
 			break LOOP
 		}
 
