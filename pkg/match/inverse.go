@@ -2,16 +2,19 @@ package match
 
 import (
 	"errors"
+	"slices"
 )
 
 var (
-	ErrNoTerms       = errors.New("no terms")
-	ErrTooManyTerms  = errors.New("too many terms")
-	ErrAnchorRange   = errors.New("anchor out of range")
-	ErrDuplicateTerm = errors.New("duplicate term")
+	ErrNoTerms      = errors.New("no terms")
+	ErrTooManyTerms = errors.New("too many terms")
+	ErrAnchorRange  = errors.New("anchor out of range")
 )
 
-var capThreshold = 4
+const (
+	maxTerms     = 64
+	capThreshold = 4
+)
 
 type ResetT struct {
 	Term     TermT // Inverse term
@@ -121,4 +124,21 @@ func resetTerm(terms []termT, idx int) {
 	} else {
 		terms[idx].asserts = nil
 	}
+}
+
+// Be wary; this has a side effect of changing terms[i].asserts slice.
+
+func shiftAnchor(terms []termT, drop anchorT) int {
+	if drop.offset == 0 {
+		return shiftLeft(terms, drop.term, 1)
+	}
+
+	var (
+		i = drop.offset
+		m = terms[drop.term].asserts
+	)
+
+	m = slices.Delete(m, i, i+1)
+	terms[drop.term].asserts = m
+	return len(m)
 }
